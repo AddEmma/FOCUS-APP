@@ -39,7 +39,26 @@ class AppBlockerService : Service() {
             private set
 
         // Listener for real-time events
-        var onBlockedAttempt: ((String, Int) -> Unit)? = null
+        var onBlockedAttempt: ((String, Int, Boolean) -> Unit)? = null
+        
+        var instance: AppBlockerService? = null
+    }
+
+    override fun onCreate() {
+        super.onCreate()
+        instance = this
+        createNotificationChannel()
+    }
+    
+    override fun onDestroy() {
+        instance = null
+        stopMonitoring()
+        isRunning = false
+        blockedAppsList = emptyList()
+        blockedAttempts = 0
+        sessionEndTimeMillis = 0
+        onBlockedAttempt = null
+        super.onDestroy()
     }
     
     private var blockedApps: List<String> = emptyList()
@@ -64,16 +83,29 @@ class AppBlockerService : Service() {
 
             // Check foreground app
             val foregroundApp = getForegroundApp()
-            Log.d(TAG, "Foreground app: $foregroundApp")
             
             if (foregroundApp != null) {
-                if (shouldBlock(foregroundApp)) {
-                    Log.d(TAG, "Blocking app: $foregroundApp")
-                    blockedAttempts++
-                    onBlockedAttempt?.invoke(foregroundApp, blockedAttempts)
-                    showBlockingOverlay()
+                val isBlocked = shouldBlock(foregroundApp)
+                
+                if (foregroundApp != lastForegroundApp) {
+                     Log.d(TAG, "New Foreground App: $foregroundApp, shouldBlock=$isBlocked")
+                     lastForegroundApp = foregroundApp
+                     // Stream detection event with blocking status
+                     onBlockedAttempt?.invoke(foregroundApp, blockedAttempts, isBlocked) 
                 }
-                lastForegroundApp = foregroundApp
+            
+                if (isBlocked) {
+                    Log.d(TAG, "Blocking app: $foregroundApp")
+                    // Force show overlay
+                    showBlockingOverlay()
+                    
+                    // Increment attempts if it's a "fresh" block (or maybe just keep updating status)
+                     if (foregroundApp != lastForegroundApp) {
+                        blockedAttempts++
+                    }
+                    // Re-send with updated attempt count
+                    onBlockedAttempt?.invoke(foregroundApp, blockedAttempts, true)
+                }
             }
 
             // Schedule next check
@@ -92,8 +124,8 @@ class AppBlockerService : Service() {
         if (pkg == "com.android.settings") return false
 
         // BLOCK if the package IS in the blocked apps list
-        val isBlocked = blockedApps.contains(pkg)
-        Log.d(TAG, "Checking $pkg: Blocked=$isBlocked")
+        // Case-insensitive check just in case
+        val isBlocked = blockedApps.any { it.equals(pkg, ignoreCase = true) }
         return isBlocked
     }
 
@@ -105,10 +137,6 @@ class AppBlockerService : Service() {
         return pkg == resolveInfo?.activityInfo?.packageName
     }
     
-    override fun onCreate() {
-        super.onCreate()
-        createNotificationChannel()
-    }
     
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
@@ -138,15 +166,6 @@ class AppBlockerService : Service() {
     
     override fun onBind(intent: Intent?): IBinder? = null
     
-    override fun onDestroy() {
-        stopMonitoring()
-        isRunning = false
-        blockedAppsList = emptyList()
-        blockedAttempts = 0
-        sessionEndTimeMillis = 0
-        onBlockedAttempt = null
-        super.onDestroy()
-    }
     
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -195,33 +214,41 @@ class AppBlockerService : Service() {
     private fun getForegroundApp(): String? {
         val usageStatsManager = getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
         val endTime = System.currentTimeMillis()
-        val startTime = endTime - 1000 * 60 // Look back 1 minute
+        val startTime = endTime - 1000 * 60 * 5 
 
-        // 1. Try UsageEvents first (most accurate)
         val usageEvents = usageStatsManager.queryEvents(startTime, endTime)
         val event = android.app.usage.UsageEvents.Event()
-        var lastResumedApp: String? = null
+        var latestForegroundApp: String? = null
+        var latestEventTime: Long = 0
         
+        var eventCount = 0
         while (usageEvents.hasNextEvent()) {
             usageEvents.getNextEvent(event)
-            if (event.eventType == android.app.usage.UsageEvents.Event.ACTIVITY_RESUMED) {
-                lastResumedApp = event.packageName
+            eventCount++
+            
+            if (event.timeStamp > latestEventTime) {
+                if (event.eventType == android.app.usage.UsageEvents.Event.ACTIVITY_RESUMED) {
+                    latestForegroundApp = event.packageName
+                    latestEventTime = event.timeStamp
+                    Log.v(TAG, "Unfiltered candidate: ${event.packageName} at ${event.timeStamp}")
+                }
             }
         }
         
-        if (lastResumedApp != null) return lastResumedApp
+        if (eventCount == 0) {
+            Log.w(TAG, "No usage events found in the last 5 minutes!")
+        }
+
+        if (latestForegroundApp != null) {
+            Log.d(TAG, "Resolved Foreground App: $latestForegroundApp")
+            return latestForegroundApp
+        }
         
-        // 2. Fallback to UsageStats
-        val stats = usageStatsManager.queryUsageStats(
-            UsageStatsManager.INTERVAL_DAILY,
-            startTime,
-            endTime
-        )
-        
-        return stats?.maxByOrNull { it.lastTimeUsed }?.packageName
+        // Fallback
+        return null
     }
     
-    private fun showBlockingOverlay() {
+    fun showBlockingOverlay() {
         val intent = Intent(this, BlockingOverlayActivity::class.java).apply {
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP)

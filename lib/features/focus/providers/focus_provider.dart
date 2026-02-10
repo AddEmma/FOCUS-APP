@@ -15,6 +15,7 @@ class FocusSession {
   final DateTime? endTime;
   final List<String> blockedApps;
   final int blockedAttempts;
+  final String? lastDetectedApp;
 
   const FocusSession({
     this.status = FocusStatus.idle,
@@ -25,6 +26,7 @@ class FocusSession {
     this.endTime,
     this.blockedApps = const [],
     this.blockedAttempts = 0,
+    this.lastDetectedApp,
   });
 
   FocusSession copyWith({
@@ -36,6 +38,7 @@ class FocusSession {
     DateTime? endTime,
     List<String>? blockedApps,
     int? blockedAttempts,
+    String? lastDetectedApp,
   }) {
     return FocusSession(
       status: status ?? this.status,
@@ -46,6 +49,7 @@ class FocusSession {
       endTime: endTime ?? this.endTime,
       blockedApps: blockedApps ?? this.blockedApps,
       blockedAttempts: blockedAttempts ?? this.blockedAttempts,
+      lastDetectedApp: lastDetectedApp ?? this.lastDetectedApp,
     );
   }
 }
@@ -108,6 +112,7 @@ class FocusNotifier extends StateNotifier<FocusSession> {
       endTime: endTime,
       blockedApps: appsToBlock,
       blockedAttempts: 0,
+      lastDetectedApp: null,
     );
 
     // Start native app focus mode
@@ -137,7 +142,11 @@ class FocusNotifier extends StateNotifier<FocusSession> {
       if (event is Map) {
         if (event['event'] == 'blocked_attempt') {
           final attempts = event['totalAttempts'] as int;
-          state = state.copyWith(blockedAttempts: attempts);
+          final pkg = event['packageName'] as String?;
+          state = state.copyWith(
+            blockedAttempts: attempts,
+            lastDetectedApp: pkg,
+          );
         }
       }
     });

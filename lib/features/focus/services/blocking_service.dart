@@ -101,4 +101,27 @@ class BlockingService {
     final hasOverlay = await hasOverlayPermission();
     return hasUsage && hasOverlay;
   }
+
+  /// Gets recent usage events for diagnostics
+  Future<List<Map<String, dynamic>>> getRecentUsageEvents() async {
+    try {
+      final result = await _channel.invokeMethod('getRecentUsageEvents');
+      if (result is List) {
+        return result.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+      }
+      return [];
+    } on PlatformException catch (e) {
+      print('Failed to get recent usage events: ${e.message}');
+      return [];
+    }
+  }
+
+  /// Force triggers the blocking overlay for testing purposes
+  Future<void> testBlockingOverlay() async {
+    try {
+      await _channel.invokeMethod('test_overlay');
+    } on PlatformException catch (e) {
+      print('Failed to test overlay: ${e.message}');
+    }
+  }
 }

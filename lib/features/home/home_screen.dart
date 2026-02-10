@@ -27,6 +27,10 @@ class HomeScreen extends ConsumerWidget {
         title: const Text(AppStrings.homeTitle),
         actions: [
           IconButton(
+            icon: const Icon(Icons.bug_report),
+            onPressed: () => context.push('/diagnostics'),
+          ),
+          IconButton(
             icon: const Icon(Icons.notifications_none_rounded),
             onPressed: () {},
           ),

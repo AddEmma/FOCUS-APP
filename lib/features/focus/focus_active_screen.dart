@@ -111,6 +111,28 @@ class FocusActiveScreen extends ConsumerWidget {
                     context,
                   ).textTheme.bodyMedium?.copyWith(color: Colors.white38),
                 ),
+                if (focusSession.blockedApps.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 8.0),
+                    child: SizedBox(
+                      height: 60,
+                      child: SingleChildScrollView(
+                        child: Column(
+                          children: focusSession.blockedApps
+                              .map(
+                                (pkg) => Text(
+                                  pkg,
+                                  style: const TextStyle(
+                                    color: Colors.white24,
+                                    fontSize: 10,
+                                  ),
+                                ),
+                              )
+                              .toList(),
+                        ),
+                      ),
+                    ),
+                  ),
                 if (focusSession.blockedAttempts > 0)
                   Padding(
                     padding: const EdgeInsets.only(top: 8.0),
@@ -135,6 +157,17 @@ class FocusActiveScreen extends ConsumerWidget {
                       ),
                     ),
                   ).animate().scale(),
+                if (focusSession.lastDetectedApp != null)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 8.0),
+                    child: Text(
+                      'Last: ${focusSession.lastDetectedApp}',
+                      style: TextStyle(
+                        color: Colors.white.withOpacity(0.5),
+                        fontSize: 10,
+                      ),
+                    ),
+                  ),
                 const SizedBox(height: AppTheme.spacingS),
                 Text(
                   _formatTime(focusSession.remainingSeconds),

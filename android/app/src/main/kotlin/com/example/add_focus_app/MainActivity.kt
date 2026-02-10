@@ -88,6 +88,14 @@ class MainActivity: FlutterActivity() {
                     requestOverlayPermission()
                     result.success(true)
                 }
+                "getRecentUsageEvents" -> {
+                    val events = getRecentUsageEvents()
+                    result.success(events)
+                }
+                "test_overlay" -> {
+                    AppBlockerService.instance?.showBlockingOverlay()
+                    result.success(true)
+                }
                 else -> result.notImplemented()
             }
         }
@@ -97,13 +105,15 @@ class MainActivity: FlutterActivity() {
             object : EventChannel.StreamHandler {
                 override fun onListen(arguments: Any?, events: EventChannel.EventSink?) {
                     eventSink = events
+                    eventSink = events
                     // Set up the callback so AppBlockerService pushes events here
-                    AppBlockerService.onBlockedAttempt = { packageName, totalAttempts ->
+                    AppBlockerService.onBlockedAttempt = { packageName, totalAttempts, isBlocked ->
                         handler.post {
                             eventSink?.success(mapOf(
                                 "event" to "blocked_attempt",
                                 "packageName" to packageName,
                                 "totalAttempts" to totalAttempts,
+                                "isBlocked" to isBlocked,
                                 "remainingMillis" to (AppBlockerService.sessionEndTimeMillis - System.currentTimeMillis())
                             ))
                         }
@@ -116,6 +126,33 @@ class MainActivity: FlutterActivity() {
                 }
             }
         )
+    }
+
+    private fun getRecentUsageEvents(): List<Map<String, Any>> {
+        val usageStatsManager = getSystemService(Context.USAGE_STATS_SERVICE) as android.app.usage.UsageStatsManager
+        val endTime = System.currentTimeMillis()
+        val startTime = endTime - 1000 * 60 * 2 // Last 2 minutes
+
+        val usageEvents = usageStatsManager.queryEvents(startTime, endTime)
+        val event = android.app.usage.UsageEvents.Event()
+        val eventList = mutableListOf<Map<String, Any>>()
+
+        while (usageEvents.hasNextEvent()) {
+            usageEvents.getNextEvent(event)
+            // Filter a bit to reduce noise, but keep enough for debug
+            if (event.eventType == android.app.usage.UsageEvents.Event.ACTIVITY_RESUMED ||
+                event.eventType == android.app.usage.UsageEvents.Event.ACTIVITY_PAUSED ||
+                event.eventType == 7 /* USER_INTERACTION */) {
+                
+                eventList.add(mapOf(
+                    "packageName" to event.packageName,
+                    "eventType" to event.eventType,
+                    "timestamp" to event.timeStamp
+                ))
+            }
+        }
+        // Return reverse chronological (newest first)
+        return eventList.reversed().take(50)
     }
     
     private fun startBlocking(blockedApps: List<String>, endTimeMillis: Long) {
