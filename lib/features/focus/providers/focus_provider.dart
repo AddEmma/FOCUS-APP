@@ -13,7 +13,8 @@ class FocusSession {
   final bool isStrict;
   final DateTime? startTime;
   final DateTime? endTime;
-  final List<String> allowedApps;
+  final List<String> blockedApps;
+  final int blockedAttempts;
 
   const FocusSession({
     this.status = FocusStatus.idle,
@@ -22,7 +23,8 @@ class FocusSession {
     this.isStrict = false,
     this.startTime,
     this.endTime,
-    this.allowedApps = const [],
+    this.blockedApps = const [],
+    this.blockedAttempts = 0,
   });
 
   FocusSession copyWith({
@@ -32,7 +34,8 @@ class FocusSession {
     bool? isStrict,
     DateTime? startTime,
     DateTime? endTime,
-    List<String>? allowedApps,
+    List<String>? blockedApps,
+    int? blockedAttempts,
   }) {
     return FocusSession(
       status: status ?? this.status,
@@ -41,19 +44,52 @@ class FocusSession {
       isStrict: isStrict ?? this.isStrict,
       startTime: startTime ?? this.startTime,
       endTime: endTime ?? this.endTime,
-      allowedApps: allowedApps ?? this.allowedApps,
+      blockedApps: blockedApps ?? this.blockedApps,
+      blockedAttempts: blockedAttempts ?? this.blockedAttempts,
     );
   }
 }
 
 class FocusNotifier extends StateNotifier<FocusSession> {
   Timer? _timer;
+  StreamSubscription? _eventSubscription;
   final BlockingService _blockingService;
   final Set<String> _selectedApps;
   final StatsNotifier _statsNotifier;
 
   FocusNotifier(this._blockingService, this._selectedApps, this._statsNotifier)
-    : super(const FocusSession());
+    : super(const FocusSession()) {
+    _checkActiveSession();
+  }
+
+  Future<void> _checkActiveSession() async {
+    final status = await _blockingService.getBlockingStatus();
+    if (status['isActive'] == true) {
+      final endTimeMillis = status['endTimeMillis'] as int;
+      final endTime = DateTime.fromMillisecondsSinceEpoch(endTimeMillis);
+      final now = DateTime.now();
+
+      if (endTime.isAfter(now)) {
+        final remainingSeconds = endTime.difference(now).inSeconds;
+        final blockedApps =
+            (status['blockedApps'] as List?)?.cast<String>() ?? [];
+        final attempts = status['blockedAttempts'] as int? ?? 0;
+
+        state = FocusSession(
+          status: FocusStatus.active,
+          durationSeconds:
+              remainingSeconds, // Approximation for restored session
+          remainingSeconds: remainingSeconds,
+          endTime: endTime,
+          blockedApps: blockedApps,
+          blockedAttempts: attempts,
+          isStrict: true, // Assume strict if recovered context likely lost
+        );
+        _startTimer();
+        _subscribeToEvents();
+      }
+    }
+  }
 
   Future<void> startSession(int durationMinutes, bool isStrict) async {
     if (state.status == FocusStatus.active) return;
@@ -61,7 +97,7 @@ class FocusNotifier extends StateNotifier<FocusSession> {
     final durationSeconds = durationMinutes * 60;
     final now = DateTime.now();
     final endTime = now.add(Duration(seconds: durationSeconds));
-    final allowedAppsList = _selectedApps.toList();
+    final appsToBlock = _selectedApps.toList();
 
     state = FocusSession(
       status: FocusStatus.active,
@@ -70,15 +106,22 @@ class FocusNotifier extends StateNotifier<FocusSession> {
       isStrict: isStrict,
       startTime: now,
       endTime: endTime,
-      allowedApps: allowedAppsList,
+      blockedApps: appsToBlock,
+      blockedAttempts: 0,
     );
 
     // Start native app focus mode
     await _blockingService.startBlocking(
-      allowedApps: allowedAppsList,
+      blockedApps: appsToBlock,
       endTime: endTime,
     );
 
+    _startTimer();
+    _subscribeToEvents();
+  }
+
+  void _startTimer() {
+    _timer?.cancel();
     _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
       if (state.remainingSeconds > 0) {
         state = state.copyWith(remainingSeconds: state.remainingSeconds - 1);
@@ -88,8 +131,21 @@ class FocusNotifier extends StateNotifier<FocusSession> {
     });
   }
 
+  void _subscribeToEvents() {
+    _eventSubscription?.cancel();
+    _eventSubscription = _blockingService.blockingEventsStream.listen((event) {
+      if (event is Map) {
+        if (event['event'] == 'blocked_attempt') {
+          final attempts = event['totalAttempts'] as int;
+          state = state.copyWith(blockedAttempts: attempts);
+        }
+      }
+    });
+  }
+
   Future<void> completeSession() async {
     _timer?.cancel();
+    _eventSubscription?.cancel();
     await _blockingService.stopBlocking();
 
     // Log the session
@@ -100,13 +156,12 @@ class FocusNotifier extends StateNotifier<FocusSession> {
 
   Future<void> cancelSession() async {
     if (state.isStrict) return; // Cannot cancel in strict mode
-    _timer?.cancel();
-    await _blockingService.stopBlocking();
-    state = const FocusSession(status: FocusStatus.idle);
+    await reset();
   }
 
   Future<void> reset() async {
     _timer?.cancel();
+    _eventSubscription?.cancel();
     await _blockingService.stopBlocking();
     state = const FocusSession(status: FocusStatus.idle);
   }
@@ -114,7 +169,8 @@ class FocusNotifier extends StateNotifier<FocusSession> {
   @override
   void dispose() {
     _timer?.cancel();
-    _blockingService.stopBlocking();
+    _eventSubscription?.cancel();
+    // _blockingService.stopBlocking(); // Don't stop native service on dispose, keeps running in background
     super.dispose();
   }
 }

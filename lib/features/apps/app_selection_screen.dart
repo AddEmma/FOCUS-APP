@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/theme/app_theme.dart';
+import '../../core/constants/app_strings.dart';
 import 'providers/apps_provider.dart';
 
 class AppSelectionScreen extends ConsumerStatefulWidget {
@@ -29,7 +30,7 @@ class _AppSelectionScreenState extends ConsumerState<AppSelectionScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Apps for Focus Mode'),
+        title: const Text(AppStrings.selectAppsTitle),
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(60),
           child: Padding(
@@ -47,7 +48,7 @@ class _AppSelectionScreenState extends ConsumerState<AppSelectionScreen> {
                 });
               },
               decoration: InputDecoration(
-                hintText: 'Allow apps for focus...',
+                hintText: AppStrings.searchApps,
                 prefixIcon: const Icon(
                   Icons.search,
                   color: AppTheme.textSecondary,
@@ -105,12 +106,14 @@ class _AppSelectionScreenState extends ConsumerState<AppSelectionScreen> {
               return Card(
                 margin: const EdgeInsets.only(bottom: AppTheme.spacingS),
                 color: isSelected
-                    ? AppTheme.primary.withOpacity(0.1)
+                    ? AppTheme.error.withOpacity(
+                        0.1,
+                      ) // Red tint for blocked logic
                     : AppTheme.surface,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(AppTheme.radiusM),
                   side: BorderSide(
-                    color: isSelected ? AppTheme.primary : Colors.transparent,
+                    color: isSelected ? AppTheme.error : Colors.transparent,
                   ),
                 ),
                 child: ListTile(
@@ -121,7 +124,7 @@ class _AppSelectionScreenState extends ConsumerState<AppSelectionScreen> {
                       fontWeight: isSelected
                           ? FontWeight.bold
                           : FontWeight.normal,
-                      color: isSelected ? AppTheme.primary : Colors.white,
+                      color: isSelected ? AppTheme.error : Colors.white,
                     ),
                   ),
                   trailing: Checkbox(
@@ -131,7 +134,7 @@ class _AppSelectionScreenState extends ConsumerState<AppSelectionScreen> {
                           .read(selectedAppsProvider.notifier)
                           .toggleApp(app.packageName);
                     },
-                    activeColor: AppTheme.primary,
+                    activeColor: AppTheme.error,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(4),
                     ),
@@ -152,9 +155,9 @@ class _AppSelectionScreenState extends ConsumerState<AppSelectionScreen> {
       floatingActionButton: selectedApps.isNotEmpty
           ? FloatingActionButton.extended(
               onPressed: () => context.push('/set-focus'),
-              backgroundColor: AppTheme.primary,
-              icon: const Icon(Icons.check),
-              label: Text('Continue (${selectedApps.length})'),
+              backgroundColor: AppTheme.error,
+              icon: const Icon(Icons.block),
+              label: Text('Block ${selectedApps.length} Apps'),
             ).animate().scale()
           : null,
     );

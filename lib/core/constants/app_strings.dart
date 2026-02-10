@@ -7,9 +7,9 @@ class AppStrings {
   static const String onboardingTitle1 = 'Too many distractions?';
   static const String onboardingBody1 =
       'Social media and games are designed to keep you hooked. Break free from the cycle.';
-  static const String onboardingTitle2 = 'Allow apps. Stay focused.';
+  static const String onboardingTitle2 = 'Block distracting apps.';
   static const String onboardingBody2 =
-      'Select apps you need for focus. Everything else will be blocked.';
+      'Select apps you want to block during focus sessions.';
   static const String onboardingTitle3 = 'Build focus habits.';
   static const String onboardingBody3 =
       'Track your progress, build streaks, and reclaim thousands of hours.';
@@ -37,14 +37,16 @@ class AppStrings {
   static const String cardFocusTime = 'Focus Time';
   static const String cardStreak = 'Current Streak';
   static const String cardBlocked = 'Sessions Completed';
+  static const String cardAttempts = 'Distractions Blocked';
   static const String startFocus = 'Start Focus';
   static const String viewUsage = 'View Usage';
 
   // App Selection
-  static const String selectAppsTitle = 'Apps for Focus';
-  static const String selectAppsSubtitle = 'Choose apps you want to allow';
-  static const String searchApps = 'Search apps...';
+  static const String selectAppsTitle = 'Block Apps';
+  static const String selectAppsSubtitle = 'Choose apps you want to block';
+  static const String searchApps = 'Search apps to block...';
   static const String continueBtn = 'Continue';
+  static const String blockAppsBtn = 'Block Apps';
 
   // Focus Setup
   static const String setFocusTitle = 'Set Focus Time';
@@ -56,6 +58,8 @@ class AppStrings {
   // Focus Active
   static const String focusShieldTitle = 'Stay focused 💪';
   static const String focusShieldBody = 'Focus mode is active. Remaining:';
+  static const String blockingCountBody = 'Blocking %d apps';
+  static const String attemptsBody = '%d distractions blocked';
   static const String emergencyCall = 'Emergency Call';
 
   // Navigation

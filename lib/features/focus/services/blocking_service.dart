@@ -3,15 +3,18 @@ import 'package:flutter/services.dart';
 /// Service for communicating with native Android app blocking functionality
 class BlockingService {
   static const _channel = MethodChannel('com.example.add_focus_app/blocking');
+  static const _eventChannel = EventChannel(
+    'com.example.add_focus_app/blocking_events',
+  );
 
-  /// Starts focus mode for the specified apps until the end time
+  /// Starts focus mode for the specified apps (to BLOCK) until the end time
   Future<bool> startBlocking({
-    required List<String> allowedApps,
+    required List<String> blockedApps,
     required DateTime endTime,
   }) async {
     try {
       await _channel.invokeMethod('startBlocking', {
-        'blockedApps': allowedApps,
+        'blockedApps': blockedApps,
         'endTimeMillis': endTime.millisecondsSinceEpoch,
       });
       return true;
@@ -39,6 +42,21 @@ class BlockingService {
     } on PlatformException {
       return false;
     }
+  }
+
+  /// Gets full status of blocking service
+  Future<Map<String, dynamic>> getBlockingStatus() async {
+    try {
+      final result = await _channel.invokeMethod('getBlockingStatus');
+      return Map<String, dynamic>.from(result ?? {});
+    } on PlatformException {
+      return {};
+    }
+  }
+
+  /// Stream of blocking events (attempts, etc.)
+  Stream<dynamic> get blockingEventsStream {
+    return _eventChannel.receiveBroadcastStream();
   }
 
   /// Checks if the app has usage stats permission

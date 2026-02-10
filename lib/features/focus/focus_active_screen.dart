@@ -101,6 +101,40 @@ class FocusActiveScreen extends ConsumerWidget {
                     context,
                   ).textTheme.bodyLarge?.copyWith(color: Colors.white70),
                 ),
+                const SizedBox(height: AppTheme.spacingXS),
+                Text(
+                  AppStrings.blockingCountBody.replaceAll(
+                    '%d',
+                    focusSession.blockedApps.length.toString(),
+                  ),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodyMedium?.copyWith(color: Colors.white38),
+                ),
+                if (focusSession.blockedAttempts > 0)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 8.0),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 6,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Text(
+                        AppStrings.attemptsBody.replaceAll(
+                          '%d',
+                          focusSession.blockedAttempts.toString(),
+                        ),
+                        style: const TextStyle(
+                          color: AppTheme.error,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ).animate().scale(),
                 const SizedBox(height: AppTheme.spacingS),
                 Text(
                   _formatTime(focusSession.remainingSeconds),

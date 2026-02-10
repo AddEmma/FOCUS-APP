@@ -162,22 +162,44 @@ class HomeScreen extends ConsumerWidget {
                           label: AppStrings.cardStreak,
                           delay: 400,
                         ),
-                        _buildStatCard(
-                          context,
-                          icon: Icons.block_rounded,
-                          color: Colors.redAccent,
-                          value: '$sessionCount',
-                          label: AppStrings.cardBlocked,
-                          delay: 500,
-                        ),
-                        _buildStatCard(
-                          context,
-                          icon: Icons.trending_up_rounded,
-                          color: Colors.greenAccent,
-                          value: 'Top 5%',
-                          label: 'Rank', // Placeholder for rank
-                          delay: 600,
-                        ),
+                        // Show blocked attempts if active, otherwise total sessions
+                        if (focusSession.status == FocusStatus.active)
+                          _buildStatCard(
+                            context,
+                            icon: Icons.shield_rounded,
+                            color: AppTheme.error,
+                            value: '${focusSession.blockedAttempts}',
+                            label: AppStrings.cardAttempts,
+                            delay: 500,
+                          )
+                        else
+                          _buildStatCard(
+                            context,
+                            icon: Icons.check_circle_rounded,
+                            color: Colors.greenAccent,
+                            value: '$sessionCount',
+                            label: AppStrings.cardBlocked,
+                            delay: 500,
+                          ),
+
+                        if (focusSession.status == FocusStatus.active)
+                          _buildStatCard(
+                            context,
+                            icon: Icons.apps_rounded,
+                            color: Colors.purpleAccent,
+                            value: '${focusSession.blockedApps.length}',
+                            label: 'Apps Blocked',
+                            delay: 600,
+                          )
+                        else
+                          _buildStatCard(
+                            context,
+                            icon: Icons.trending_up_rounded,
+                            color: Colors.purpleAccent,
+                            value: 'Top 5%',
+                            label: 'Rank',
+                            delay: 600,
+                          ),
                       ],
                     );
                   },
