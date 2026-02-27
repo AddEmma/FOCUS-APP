@@ -95,6 +95,24 @@ class BlockingService {
     }
   }
 
+  /// Checks if the app has notification permission (Android 13+)
+  Future<bool> hasNotificationPermission() async {
+    try {
+      return await _channel.invokeMethod('hasNotificationPermission') ?? true;
+    } on PlatformException {
+      return true;
+    }
+  }
+
+  /// Requests notification permission from the user
+  Future<void> requestNotificationPermission() async {
+    try {
+      await _channel.invokeMethod('requestNotificationPermission');
+    } on PlatformException catch (e) {
+      print('Failed to request notification permission: ${e.message}');
+    }
+  }
+
   /// Checks if all required permissions are granted
   Future<bool> hasRequiredPermissions() async {
     final hasUsage = await hasUsageStatsPermission();

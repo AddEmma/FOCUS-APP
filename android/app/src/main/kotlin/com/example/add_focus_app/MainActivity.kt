@@ -80,6 +80,9 @@ class MainActivity: FlutterActivity() {
                 "hasOverlayPermission" -> {
                     result.success(hasOverlayPermission())
                 }
+                "hasNotificationPermission" -> {
+                    result.success(hasNotificationPermission())
+                }
                 "requestUsageStatsPermission" -> {
                     requestUsageStatsPermission()
                     result.success(true)
@@ -88,12 +91,16 @@ class MainActivity: FlutterActivity() {
                     requestOverlayPermission()
                     result.success(true)
                 }
+                "requestNotificationPermission" -> {
+                    requestNotificationPermission()
+                    result.success(true)
+                }
                 "getRecentUsageEvents" -> {
                     val events = getRecentUsageEvents()
                     result.success(events)
                 }
                 "test_overlay" -> {
-                    AppBlockerService.instance?.showBlockingOverlay()
+                    AppBlockerService.instance?.showBlockingOverlay("com.example.test")
                     result.success(true)
                 }
                 else -> result.notImplemented()
@@ -217,6 +224,20 @@ class MainActivity: FlutterActivity() {
             )
             intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             startActivity(intent)
+        }
+    }
+
+    private fun hasNotificationPermission(): Boolean {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
+        } else {
+            true
+        }
+    }
+
+    private fun requestNotificationPermission() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            requestPermissions(arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), 101)
         }
     }
 

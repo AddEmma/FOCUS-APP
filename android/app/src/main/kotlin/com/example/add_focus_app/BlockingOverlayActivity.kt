@@ -35,6 +35,19 @@ class BlockingOverlayActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         
         endTimeMillis = intent.getLongExtra(AppBlockerService.EXTRA_END_TIME, 0)
+        val pkgName = intent.getStringExtra(AppBlockerService.EXTRA_PACKAGE_NAME)
+        
+        // Fetch app name if possible
+        val appName = if (pkgName != null) {
+            try {
+                val appInfo = packageManager.getApplicationInfo(pkgName, 0)
+                packageManager.getApplicationLabel(appInfo).toString()
+            } catch (e: Exception) {
+                "this app"
+            }
+        } else {
+            "this app"
+        }
         
         // Make the activity fullscreen and prevent dismissal
         window.setFlags(
@@ -77,7 +90,7 @@ class BlockingOverlayActivity : AppCompatActivity() {
         
         // Description
         val descTextView = TextView(this).apply {
-            text = "This app is blocked during your focus session.\nStay focused!"
+            text = "$appName is blocked for now.\nStay focused!"
             textSize = 16f
             setTextColor(0xAAFFFFFF.toInt())
             gravity = Gravity.CENTER
@@ -183,5 +196,16 @@ class BlockingOverlayActivity : AppCompatActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         endTimeMillis = intent.getLongExtra(AppBlockerService.EXTRA_END_TIME, endTimeMillis)
+    }
+
+    override fun onPause() {
+        super.onPause()
+        // If the blocker service is still running, the user tried to dismiss
+        // the overlay (e.g., via task switcher). The service's monitoring loop
+        // will catch the blocked app in the foreground and re-launch us anyway,
+        // so we just finish cleanly here to avoid stacking duplicate activities.
+        if (AppBlockerService.isRunning) {
+            finish()
+        }
     }
 }

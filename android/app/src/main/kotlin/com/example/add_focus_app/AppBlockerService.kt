@@ -24,6 +24,7 @@ class AppBlockerService : Service() {
         const val ACTION_STOP = "com.example.add_focus_app.STOP_BLOCKING"
         const val EXTRA_BLOCKED_APPS = "blocked_apps"
         const val EXTRA_END_TIME = "end_time"
+        const val EXTRA_PACKAGE_NAME = "package_name"
         
         const val TAG = "AppBlockerService"
         
@@ -44,12 +45,20 @@ class AppBlockerService : Service() {
         var instance: AppBlockerService? = null
     }
 
+    private var blockedApps: List<String> = emptyList()
+    private var endTimeMillis: Long = 0
+    private val handler = Handler(Looper.getMainLooper())
+    private var isMonitoring = false
+    private var lastForegroundApp: String? = null
+    private var launcherPackage: String? = null
+
     override fun onCreate() {
         super.onCreate()
         instance = this
         createNotificationChannel()
+        updateLauncherPackage()
     }
-    
+
     override fun onDestroy() {
         instance = null
         stopMonitoring()
@@ -60,12 +69,15 @@ class AppBlockerService : Service() {
         onBlockedAttempt = null
         super.onDestroy()
     }
-    
-    private var blockedApps: List<String> = emptyList()
-    private var endTimeMillis: Long = 0
-    private val handler = Handler(Looper.getMainLooper())
-    private var isMonitoring = false
-    private var lastForegroundApp: String? = null
+
+    private fun updateLauncherPackage() {
+        val intent = Intent(Intent.ACTION_MAIN).apply {
+            addCategory(Intent.CATEGORY_HOME)
+        }
+        val resolveInfo = packageManager.resolveActivity(intent, 0)
+        launcherPackage = resolveInfo?.activityInfo?.packageName
+        Log.d(TAG, "Launcher resolved to: $launcherPackage")
+    }
 
     private val monitorRunnable = object : Runnable {
         override fun run() {
@@ -86,31 +98,83 @@ class AppBlockerService : Service() {
             
             if (foregroundApp != null) {
                 val isBlocked = shouldBlock(foregroundApp)
+                val isNewApp = foregroundApp != lastForegroundApp
                 
-                if (foregroundApp != lastForegroundApp) {
-                     Log.d(TAG, "New Foreground App: $foregroundApp, shouldBlock=$isBlocked")
-                     lastForegroundApp = foregroundApp
-                     // Stream detection event with blocking status
-                     onBlockedAttempt?.invoke(foregroundApp, blockedAttempts, isBlocked) 
-                }
-            
-                if (isBlocked) {
-                    Log.d(TAG, "Blocking app: $foregroundApp")
-                    // Force show overlay
-                    showBlockingOverlay()
+                if (isNewApp) {
+                    Log.d(TAG, "New Foreground App: $foregroundApp, shouldBlock=$isBlocked")
                     
-                    // Increment attempts if it's a "fresh" block (or maybe just keep updating status)
-                     if (foregroundApp != lastForegroundApp) {
+                    // Increment blocked attempts on first detection of a blocked app
+                    if (isBlocked) {
                         blockedAttempts++
                     }
-                    // Re-send with updated attempt count
+                    
+                    lastForegroundApp = foregroundApp
+                    // Stream detection event with blocking status
+                    onBlockedAttempt?.invoke(foregroundApp, blockedAttempts, isBlocked)
+                }
+            
+                // ALWAYS block on every poll cycle — not just on app change.
+                // This ensures that if the user dismisses the overlay and returns
+                // to the blocked app, it gets re-blocked immediately on the next tick.
+                if (isBlocked) {
+                    Log.i(TAG, "!!! SHIELD ACTIVE: Blocking $foregroundApp !!!")
+                    // Send user to home screen first, then show overlay
+                    sendUserHome()
+                    showBlockingOverlay(foregroundApp)
                     onBlockedAttempt?.invoke(foregroundApp, blockedAttempts, true)
                 }
             }
 
-            // Schedule next check
-            handler.postDelayed(this, 500)
+            // Schedule next check (300ms for snappier interception)
+            handler.postDelayed(this, 300)
         }
+    }
+
+    private fun getForegroundApp(): String? {
+        val usageStatsManager = getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
+        val now = System.currentTimeMillis()
+
+        // Source 1: Aggregated Usage Stats (Last 1 minute)
+        // This is often more reliable for "Who is in front right now?" on some ROMs
+        val stats = usageStatsManager.queryUsageStats(UsageStatsManager.INTERVAL_DAILY, now - 60000, now)
+        var latestStatsApp: String? = null
+        var latestStatsTime: Long = 0
+        
+        if (stats != null) {
+            for (stat in stats) {
+                if (stat.lastTimeUsed > latestStatsTime) {
+                    latestStatsApp = stat.packageName
+                    latestStatsTime = stat.lastTimeUsed
+                }
+            }
+        }
+
+        // Source 2: Recent Events (Last 10 seconds)
+        // Faster for detecting quick switches
+        val usageEvents = usageStatsManager.queryEvents(now - 10000, now)
+        val event = android.app.usage.UsageEvents.Event()
+        var latestEventApp: String? = null
+        var latestEventTime: Long = 0
+        
+        while (usageEvents.hasNextEvent()) {
+            usageEvents.getNextEvent(event)
+            if (event.timeStamp > latestEventTime) {
+                if (event.eventType == android.app.usage.UsageEvents.Event.ACTIVITY_RESUMED) {
+                    latestEventApp = event.packageName
+                    latestEventTime = event.timeStamp
+                }
+            }
+        }
+
+        // Resolution: Prefer Activity Events (more specific) if fresh, else use UsageStats
+        val resolvedApp = if (latestEventTime > latestStatsTime - 500) latestEventApp else latestStatsApp
+        
+        if (resolvedApp != null) {
+            Log.v(TAG, "Detection -> Stats: $latestStatsApp (${now - latestStatsTime}ms ago), " +
+                  "Event: $latestEventApp (${now - latestEventTime}ms ago) -> Resolved: $resolvedApp")
+        }
+        
+        return resolvedApp ?: latestStatsApp ?: latestEventApp
     }
 
     private fun shouldBlock(pkg: String): Boolean {
@@ -118,25 +182,29 @@ class AppBlockerService : Service() {
         if (pkg == packageName) return false
 
         // ALWAYS ALLOW: The Launcher (Home Screen)
-        if (isLauncher(pkg)) return false
+        // Use cached launcher if available, else resolve
+        val launcher = launcherPackage ?: updateLauncherPackage().let { launcherPackage }
+        if (pkg == launcher) return false
 
-        // ALWAYS ALLOW: System Settings
-        if (pkg == "com.android.settings") return false
+        // ALWAYS ALLOW: System Settings & common system UI
+        if (pkg == "com.android.settings" || pkg == "com.android.systemui") return false
+        
+        // ALLOW: MIUI Security Center (required for permissions overlays sometimes)
+        if (pkg == "com.miui.securitycenter") return false
 
         // BLOCK if the package IS in the blocked apps list
-        // Case-insensitive check just in case
-        val isBlocked = blockedApps.any { it.equals(pkg, ignoreCase = true) }
-        return isBlocked
+        val isBlockedList = blockedApps.any { it.equals(pkg, ignoreCase = true) }
+        
+        if (isBlockedList) {
+            Log.d(TAG, "Shield check: $pkg IS BLOCKED (Matches in list of ${blockedApps.size} apps)")
+        }
+        
+        return isBlockedList
     }
 
     private fun isLauncher(pkg: String): Boolean {
-        val intent = Intent(Intent.ACTION_MAIN).apply {
-            addCategory(Intent.CATEGORY_HOME)
-        }
-        val resolveInfo = packageManager.resolveActivity(intent, 0)
-        return pkg == resolveInfo?.activityInfo?.packageName
+        return pkg == launcherPackage
     }
-    
     
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
@@ -151,9 +219,12 @@ class AppBlockerService : Service() {
                 sessionEndTimeMillis = endTimeMillis
                 
                 if (endTimeMillis > System.currentTimeMillis()) {
+                    Log.d(TAG, "Starting blocking session for ${blockedApps.size} apps: $blockedApps")
                     startForegroundService()
                     startMonitoring()
                     isRunning = true
+                } else {
+                    Log.w(TAG, "Start requested but end time $endTimeMillis is in the past!")
                 }
             }
             ACTION_STOP -> {
@@ -211,50 +282,24 @@ class AppBlockerService : Service() {
         handler.removeCallbacks(monitorRunnable)
     }
     
-    private fun getForegroundApp(): String? {
-        val usageStatsManager = getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
-        val endTime = System.currentTimeMillis()
-        val startTime = endTime - 1000 * 60 * 5 
-
-        val usageEvents = usageStatsManager.queryEvents(startTime, endTime)
-        val event = android.app.usage.UsageEvents.Event()
-        var latestForegroundApp: String? = null
-        var latestEventTime: Long = 0
-        
-        var eventCount = 0
-        while (usageEvents.hasNextEvent()) {
-            usageEvents.getNextEvent(event)
-            eventCount++
-            
-            if (event.timeStamp > latestEventTime) {
-                if (event.eventType == android.app.usage.UsageEvents.Event.ACTIVITY_RESUMED) {
-                    latestForegroundApp = event.packageName
-                    latestEventTime = event.timeStamp
-                    Log.v(TAG, "Unfiltered candidate: ${event.packageName} at ${event.timeStamp}")
-                }
-            }
-        }
-        
-        if (eventCount == 0) {
-            Log.w(TAG, "No usage events found in the last 5 minutes!")
-        }
-
-        if (latestForegroundApp != null) {
-            Log.d(TAG, "Resolved Foreground App: $latestForegroundApp")
-            return latestForegroundApp
-        }
-        
-        // Fallback
-        return null
-    }
-    
-    fun showBlockingOverlay() {
+    fun showBlockingOverlay(pkgName: String? = null) {
         val intent = Intent(this, BlockingOverlayActivity::class.java).apply {
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP)
+            addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
             addFlags(Intent.FLAG_ACTIVITY_EXCLUDE_FROM_RECENTS)
             putExtra(EXTRA_END_TIME, endTimeMillis)
+            putExtra(EXTRA_PACKAGE_NAME, pkgName)
         }
         startActivity(intent)
     }
+
+    private fun sendUserHome() {
+        val homeIntent = Intent(Intent.ACTION_MAIN).apply {
+            addCategory(Intent.CATEGORY_HOME)
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK
+        }
+        startActivity(homeIntent)
+    }
 }
+
