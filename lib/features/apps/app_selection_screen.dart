@@ -31,6 +31,39 @@ class _AppSelectionScreenState extends ConsumerState<AppSelectionScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text(AppStrings.selectAppsTitle),
+        actions: [
+          appsAsyncValue.when(
+            data: (apps) {
+              final filteredApps = apps.where((app) {
+                return app.appName.toLowerCase().contains(_searchQuery);
+              }).toList();
+
+              final allFilteredSelected = filteredApps.every(
+                (app) => selectedApps.contains(app.packageName),
+              );
+
+              return TextButton(
+                onPressed: () {
+                  if (allFilteredSelected) {
+                    ref.read(selectedAppsProvider.notifier).deselectAll();
+                  } else {
+                    ref
+                        .read(selectedAppsProvider.notifier)
+                        .selectAll(
+                          filteredApps.map((a) => a.packageName).toList(),
+                        );
+                  }
+                },
+                child: Text(
+                  allFilteredSelected ? 'Deselect All' : 'Select All',
+                  style: const TextStyle(color: AppTheme.error),
+                ),
+              );
+            },
+            loading: () => const SizedBox.shrink(),
+            error: (_, __) => const SizedBox.shrink(),
+          ),
+        ],
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(60),
           child: Padding(

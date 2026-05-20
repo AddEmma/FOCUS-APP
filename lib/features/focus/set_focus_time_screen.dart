@@ -91,6 +91,32 @@ class _SetFocusTimeScreenState extends ConsumerState<SetFocusTimeScreen> {
                         .animate()
                         .fadeIn(delay: 200.ms)
                         .slideY(begin: 0.2, end: 0),
+                    const SizedBox(height: AppTheme.spacingL),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: AppTheme.spacingM,
+                      ),
+                      child: Column(
+                        children: [
+                          Slider(
+                            value: _selectedMinutes.toDouble(),
+                            min: 1,
+                            max: 240,
+                            divisions: 239,
+                            activeColor: AppTheme.primary,
+                            inactiveColor: Colors.white10,
+                            onChanged: (value) {
+                              setState(() => _selectedMinutes = value.toInt());
+                            },
+                          ),
+                          Text(
+                            'Drag to customize time (up to 4 hours)',
+                            style: Theme.of(context).textTheme.bodySmall
+                                ?.copyWith(color: AppTheme.textSecondary),
+                          ),
+                        ],
+                      ),
+                    ).animate().fadeIn(delay: 300.ms),
                   ],
                 ),
               ),

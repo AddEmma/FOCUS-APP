@@ -1,31 +1,40 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
-import 'package:go_router/go_router.dart';
-import '../../core/constants/app_strings.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:uuid/uuid.dart';
 import '../../core/theme/app_theme.dart';
+import 'providers/schedule_provider.dart';
+import 'models/schedule.dart';
+import '../apps/providers/apps_provider.dart';
 
-class ScheduleScreen extends StatefulWidget {
+class ScheduleScreen extends ConsumerStatefulWidget {
   const ScheduleScreen({super.key});
 
   @override
-  State<ScheduleScreen> createState() => _ScheduleScreenState();
+  ConsumerState<ScheduleScreen> createState() => _ScheduleScreenState();
 }
 
-class _ScheduleScreenState extends State<ScheduleScreen> {
-  int _selectedDayIndex = 0;
+class _ScheduleScreenState extends ConsumerState<ScheduleScreen> {
+  int _selectedDayIndex = DateTime.now().weekday - 1;
   final List<String> _days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
   @override
   Widget build(BuildContext context) {
+    final schedules = ref.watch(scheduleProvider);
+    final selectedApps = ref.watch(selectedAppsProvider);
+
+    // Filter schedules for the selected day (1-7)
+    final daySchedules = schedules
+        .where((s) => s.days.contains(_selectedDayIndex + 1))
+        .toList();
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Schedule'),
         actions: [
           IconButton(
             icon: const Icon(Icons.add_rounded),
-            onPressed: () {
-              // TODO: Implement add schedule logic
-            },
+            onPressed: () => _showAddScheduleDialog(context, ref),
           ),
         ],
       ),
@@ -71,12 +80,10 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                           ),
                           const SizedBox(height: 4),
                           Text(
-                            '${12 + index}', // Mock date
+                            '${DateTime.now().add(Duration(days: index - (DateTime.now().weekday - 1))).day}',
                             style: Theme.of(context).textTheme.titleMedium
                                 ?.copyWith(
-                                  color: isSelected
-                                      ? Colors.white
-                                      : Colors.white,
+                                  color: Colors.white,
                                   fontWeight: FontWeight.bold,
                                 ),
                           ),
@@ -92,29 +99,8 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
 
             // Schedule List
             Expanded(
-              child: ListView(
-                padding: const EdgeInsets.all(AppTheme.spacingM),
-                children: [
-                  _buildScheduleCard(
-                    context,
-                    timeRange: '09:00 AM - 11:00 AM',
-                    title: 'Deep Work',
-                    appsCount: 5,
-                    isActive: true,
-                    delay: 100,
-                  ),
-                  _buildScheduleCard(
-                    context,
-                    timeRange: '02:00 PM - 04:00 PM',
-                    title: 'No Social Media',
-                    appsCount: 3,
-                    isActive: false,
-                    delay: 200,
-                  ),
-                  // Empty State Placeholder
-                  if (false) ...[
-                    const Spacer(),
-                    Center(
+              child: daySchedules.isEmpty
+                  ? Center(
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
@@ -125,37 +111,81 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                           ),
                           const SizedBox(height: AppTheme.spacingM),
                           Text(
-                            'No schedules for this day',
+                            'No schedules for ${_days[_selectedDayIndex]}',
                             style: Theme.of(context).textTheme.bodyLarge
                                 ?.copyWith(color: AppTheme.textSecondary),
                           ),
                         ],
                       ),
+                    )
+                  : ListView.builder(
+                      padding: const EdgeInsets.all(AppTheme.spacingM),
+                      itemCount: daySchedules.length,
+                      itemBuilder: (context, index) {
+                        final schedule = daySchedules[index];
+                        return _buildScheduleCard(
+                          context,
+                          schedule: schedule,
+                          delay: 100 * index,
+                        );
+                      },
                     ),
-                    const Spacer(),
-                  ],
-                ],
-              ),
             ),
           ],
         ),
       ),
       floatingActionButton: FloatingActionButton(
-        onPressed: () {
-          // TODO: Implement add schedule dialog
-        },
+        onPressed: () => _showAddScheduleDialog(context, ref),
         backgroundColor: AppTheme.primary,
         child: const Icon(Icons.add_rounded),
       ),
     );
   }
 
+  void _showAddScheduleDialog(BuildContext context, WidgetRef ref) async {
+    final selectedApps = ref.read(selectedAppsProvider);
+    if (selectedApps.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please select apps to block first')),
+      );
+      return;
+    }
+
+    // Simplified picker for demo purposes
+    final TimeOfDay? startTime = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay.now(),
+      helpText: 'Start Time',
+    );
+    if (startTime == null) return;
+
+    final TimeOfDay? endTime = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay(
+        hour: startTime.hour + 1,
+        minute: startTime.minute,
+      ),
+      helpText: 'End Time',
+    );
+    if (endTime == null) return;
+
+    final schedule = FocusSchedule(
+      id: const Uuid().v4(),
+      title: 'Focus Session',
+      startTime:
+          '${startTime.hour.toString().padLeft(2, '0')}:${startTime.minute.toString().padLeft(2, '0')}',
+      endTime:
+          '${endTime.hour.toString().padLeft(2, '0')}:${endTime.minute.toString().padLeft(2, '0')}',
+      days: [_selectedDayIndex + 1],
+      blockedApps: selectedApps.toList(),
+    );
+
+    ref.read(scheduleProvider.notifier).addSchedule(schedule);
+  }
+
   Widget _buildScheduleCard(
     BuildContext context, {
-    required String timeRange,
-    required String title,
-    required int appsCount,
-    required bool isActive,
+    required FocusSchedule schedule,
     required int delay,
   }) {
     return Container(
@@ -165,7 +195,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
         color: AppTheme.surface,
         borderRadius: BorderRadius.circular(AppTheme.radiusM),
         border: Border.all(
-          color: isActive
+          color: schedule.isEnabled
               ? AppTheme.primary.withOpacity(0.5)
               : Colors.transparent,
         ),
@@ -177,7 +207,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  timeRange,
+                  '${schedule.startTime} - ${schedule.endTime}',
                   style: Theme.of(context).textTheme.labelMedium?.copyWith(
                     color: AppTheme.primary,
                     fontWeight: FontWeight.bold,
@@ -185,14 +215,14 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  title,
+                  schedule.title,
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
                     fontWeight: FontWeight.bold,
                   ),
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  '$appsCount apps blocked',
+                  '${schedule.blockedApps.length} apps blocked',
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
                     color: AppTheme.textSecondary,
                   ),
@@ -201,9 +231,23 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
             ),
           ),
           Switch(
-            value: isActive,
-            onChanged: (value) {},
+            value: schedule.isEnabled,
+            onChanged: (value) {
+              ref
+                  .read(scheduleProvider.notifier)
+                  .toggleSchedule(schedule.id, value);
+            },
             activeColor: AppTheme.primary,
+          ),
+          IconButton(
+            icon: const Icon(
+              Icons.delete_outline_rounded,
+              color: AppTheme.error,
+              size: 20,
+            ),
+            onPressed: () {
+              ref.read(scheduleProvider.notifier).removeSchedule(schedule.id);
+            },
           ),
         ],
       ),

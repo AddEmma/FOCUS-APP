@@ -125,11 +125,22 @@ class MainActivity: FlutterActivity() {
                             ))
                         }
                     }
+
+                    AppBlockerService.onAppActivity = { packageName ->
+                        handler.post {
+                            eventSink?.success(mapOf(
+                                "event" to "app_activity",
+                                "packageName" to packageName,
+                                "timestamp" to System.currentTimeMillis()
+                            ))
+                        }
+                    }
                 }
 
                 override fun onCancel(arguments: Any?) {
                     eventSink = null
                     AppBlockerService.onBlockedAttempt = null
+                    AppBlockerService.onAppActivity = null
                 }
             }
         )

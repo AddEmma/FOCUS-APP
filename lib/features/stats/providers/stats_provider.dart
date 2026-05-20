@@ -1,6 +1,8 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
+import 'dart:async';
+import '../../focus/services/blocking_service.dart';
 
 class StatsData {
   final Map<String, int> dailyUsage; // Date string (YYYY-MM-DD) -> Seconds
@@ -49,8 +51,63 @@ class StatsData {
 }
 
 class StatsNotifier extends StateNotifier<AsyncValue<StatsData>> {
+  StreamSubscription? _eventSubscription;
+  String? _currentApp;
+  DateTime? _appStartTime;
+
   StatsNotifier() : super(const AsyncValue.loading()) {
     _loadStats();
+    _listenToEvents();
+  }
+
+  @override
+  void dispose() {
+    _eventSubscription?.cancel();
+    super.dispose();
+  }
+
+  void _listenToEvents() {
+    _eventSubscription = BlockingService().blockingEventsStream.listen((event) {
+      if (event is Map) {
+        final eventType = event['event'];
+        if (eventType == 'app_activity') {
+          _handleAppActivity(event['packageName'] as String);
+        } else if (eventType == 'blocked_attempt') {
+          // You could also log blocked attempts here if you want to track them in stats
+        }
+      }
+    });
+  }
+
+  void _handleAppActivity(String packageName) {
+    if (!state.hasValue) return;
+
+    final now = DateTime.now();
+    if (_currentApp != null && _appStartTime != null) {
+      final duration = now.difference(_appStartTime!).inSeconds;
+      if (duration > 0) {
+        _logAppUsage(_currentApp!, duration);
+      }
+    }
+
+    _currentApp = packageName;
+    _appStartTime = now;
+  }
+
+  Future<void> _logAppUsage(String packageName, int durationSeconds) async {
+    final currentData = state.value!;
+    final today = DateTime.now().toIso8601String().split('T')[0];
+
+    final newDailyUsage = Map<String, int>.from(currentData.dailyUsage);
+    newDailyUsage[today] = (newDailyUsage[today] ?? 0) + durationSeconds;
+
+    final newData = currentData.copyWith(
+      dailyUsage: newDailyUsage,
+      totalFocusSeconds: currentData.totalFocusSeconds + durationSeconds,
+    );
+
+    state = AsyncValue.data(newData);
+    await _saveStats(newData);
   }
 
   Future<void> _loadStats() async {

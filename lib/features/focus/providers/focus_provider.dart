@@ -58,12 +58,28 @@ class FocusNotifier extends StateNotifier<FocusSession> {
   Timer? _timer;
   StreamSubscription? _eventSubscription;
   final BlockingService _blockingService;
-  final Set<String> _selectedApps;
+  final Ref _ref;
   final StatsNotifier _statsNotifier;
 
-  FocusNotifier(this._blockingService, this._selectedApps, this._statsNotifier)
+  FocusNotifier(this._blockingService, this._statsNotifier, this._ref)
     : super(const FocusSession()) {
     _checkActiveSession();
+    _listenToSelectedApps();
+  }
+
+  void _listenToSelectedApps() {
+    _ref.listen<Set<String>>(selectedAppsProvider, (previous, next) {
+      if (state.status == FocusStatus.active) {
+        // Automatically sync with native service if session is active
+        final appsToBlock = next.toList();
+        state = state.copyWith(blockedApps: appsToBlock);
+
+        _blockingService.startBlocking(
+          blockedApps: appsToBlock,
+          endTime: state.endTime!,
+        );
+      }
+    });
   }
 
   Future<void> _checkActiveSession() async {
@@ -96,12 +112,10 @@ class FocusNotifier extends StateNotifier<FocusSession> {
   }
 
   Future<void> startSession(int durationMinutes, bool isStrict) async {
-    if (state.status == FocusStatus.active) return;
-
     final durationSeconds = durationMinutes * 60;
     final now = DateTime.now();
     final endTime = now.add(Duration(seconds: durationSeconds));
-    final appsToBlock = _selectedApps.toList();
+    final appsToBlock = _ref.read(selectedAppsProvider).toList();
 
     state = FocusSession(
       status: FocusStatus.active,
@@ -192,7 +206,6 @@ final blockingServiceProvider = Provider<BlockingService>((ref) {
 // Updated focusProvider that uses BlockingService and selected apps
 final focusProvider = StateNotifierProvider<FocusNotifier, FocusSession>((ref) {
   final blockingService = ref.watch(blockingServiceProvider);
-  final selectedApps = ref.watch(selectedAppsProvider);
   final statsNotifier = ref.watch(statsProvider.notifier);
-  return FocusNotifier(blockingService, selectedApps, statsNotifier);
+  return FocusNotifier(blockingService, statsNotifier, ref);
 });

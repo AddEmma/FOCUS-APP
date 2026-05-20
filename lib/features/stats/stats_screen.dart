@@ -110,16 +110,18 @@ class _StatsScreenState extends ConsumerState<StatsScreen> {
                               ),
                               borderData: FlBorderData(show: false),
                               gridData: const FlGridData(show: false),
-                              barGroups: [
-                                // Mock data for now, real data would map dailyUsage dates to index
-                                _makeGroupData(0, 2),
-                                _makeGroupData(1, 4.5),
-                                _makeGroupData(2, 3),
-                                _makeGroupData(3, 6),
-                                _makeGroupData(4, 2.5),
-                                _makeGroupData(5, 1),
-                                _makeGroupData(6, 0.5),
-                              ],
+                              barGroups: List.generate(7, (index) {
+                                final day = DateTime.now().subtract(
+                                  Duration(days: 6 - index),
+                                );
+                                final dateString = day.toIso8601String().split(
+                                  'T',
+                                )[0];
+                                final seconds =
+                                    statsData.dailyUsage[dateString] ?? 0;
+                                final hours = seconds / 3600;
+                                return _makeGroupData(index, hours);
+                              }),
                             ),
                           ),
                         ),

@@ -42,6 +42,9 @@ class AppBlockerService : Service() {
         // Listener for real-time events
         var onBlockedAttempt: ((String, Int, Boolean) -> Unit)? = null
         
+        // Listener for app usage tracking (real-time)
+        var onAppActivity: ((String) -> Unit)? = null
+        
         var instance: AppBlockerService? = null
     }
 
@@ -102,6 +105,9 @@ class AppBlockerService : Service() {
                 
                 if (isNewApp) {
                     Log.d(TAG, "New Foreground App: $foregroundApp, shouldBlock=$isBlocked")
+                    
+                    // Report all app activity for stats tracking
+                    onAppActivity?.invoke(foregroundApp)
                     
                     // Increment blocked attempts on first detection of a blocked app
                     if (isBlocked) {
@@ -209,22 +215,37 @@ class AppBlockerService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
             ACTION_START -> {
-                blockedApps = intent.getStringArrayListExtra(EXTRA_BLOCKED_APPS) ?: emptyList()
-                endTimeMillis = intent.getLongExtra(EXTRA_END_TIME, 0)
-                lastForegroundApp = null
-                blockedAttempts = 0
+                val newBlockedApps = intent.getStringArrayListExtra(EXTRA_BLOCKED_APPS) ?: emptyList()
+                val newEndTimeMillis = intent.getLongExtra(EXTRA_END_TIME, 0)
+                
+                // If service is already running and end time is substantially the same,
+                // just update the list and notification without resetting attempts.
+                val isUpdate = isRunning && Math.abs(newEndTimeMillis - endTimeMillis) < 2000
+                
+                blockedApps = newBlockedApps
+                endTimeMillis = newEndTimeMillis
                 
                 // Update companion object for real-time access
                 blockedAppsList = blockedApps
                 sessionEndTimeMillis = endTimeMillis
                 
+                if (isUpdate) {
+                    Log.d(TAG, "Updating active session with ${blockedApps.size} apps: $blockedApps")
+                } else {
+                    Log.d(TAG, "Starting new blocking session for ${blockedApps.size} apps: $blockedApps")
+                    lastForegroundApp = null
+                    blockedAttempts = 0
+                }
+
                 if (endTimeMillis > System.currentTimeMillis()) {
-                    Log.d(TAG, "Starting blocking session for ${blockedApps.size} apps: $blockedApps")
                     startForegroundService()
-                    startMonitoring()
-                    isRunning = true
+                    if (!isUpdate) {
+                        startMonitoring()
+                        isRunning = true
+                    }
                 } else {
                     Log.w(TAG, "Start requested but end time $endTimeMillis is in the past!")
+                    if (!isRunning) stopSelf()
                 }
             }
             ACTION_STOP -> {

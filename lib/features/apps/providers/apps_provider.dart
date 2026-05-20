@@ -50,6 +50,16 @@ class SelectedAppsNotifier extends StateNotifier<Set<String>> {
     state = selection;
     _saveSelection();
   }
+
+  void selectAll(List<String> packageNames) {
+    state = packageNames.toSet();
+    _saveSelection();
+  }
+
+  void deselectAll() {
+    state = {};
+    _saveSelection();
+  }
 }
 
 final selectedAppsProvider =

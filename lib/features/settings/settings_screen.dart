@@ -1,13 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
-import '../../core/constants/app_strings.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/theme/app_theme.dart';
+import 'providers/settings_provider.dart';
 
-class SettingsScreen extends StatelessWidget {
+class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final settings = ref.watch(settingsProvider);
+    final notifier = ref.read(settingsProvider.notifier);
+
     return Scaffold(
       appBar: AppBar(title: const Text('Settings')),
       body: ListView(
@@ -19,8 +23,8 @@ class SettingsScreen extends StatelessWidget {
             icon: Icons.notifications_rounded,
             title: 'Notifications',
             subtitle: 'Get reminders to focus',
-            value: true,
-            onChanged: (val) {},
+            value: settings.notificationsEnabled,
+            onChanged: (val) => notifier.setNotificationsEnabled(val),
             delay: 100,
           ),
           _buildSwitchTile(
@@ -28,8 +32,8 @@ class SettingsScreen extends StatelessWidget {
             icon: Icons.dark_mode_rounded,
             title: 'Dark Mode',
             subtitle: 'Always on',
-            value: true,
-            onChanged: (val) {},
+            value: settings.darkMode,
+            onChanged: (val) => notifier.setDarkMode(val),
             delay: 200,
           ),
 
@@ -40,16 +44,16 @@ class SettingsScreen extends StatelessWidget {
             icon: Icons.lock_outline_rounded,
             title: 'Strict Mode',
             subtitle: 'Prevent cancelling focus sessions',
-            value: false,
-            onChanged: (val) {},
+            value: settings.strictMode,
+            onChanged: (val) => notifier.setStrictMode(val),
             delay: 300,
           ),
           _buildTile(
             context,
             icon: Icons.timer_rounded,
             title: 'Default Duration',
-            trailing: '30 min',
-            onTap: () {},
+            trailing: '${settings.defaultDurationMinutes} min',
+            onTap: () => _showDurationPicker(context, ref),
             delay: 400,
           ),
 
@@ -73,6 +77,62 @@ class SettingsScreen extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+
+  void _showDurationPicker(BuildContext context, WidgetRef ref) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: AppTheme.background,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(
+          top: Radius.circular(AppTheme.radiusL),
+        ),
+      ),
+      builder: (context) {
+        return Container(
+          padding: const EdgeInsets.all(AppTheme.spacingL),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                'Select Default Duration',
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
+              const SizedBox(height: AppTheme.spacingL),
+              Wrap(
+                spacing: AppTheme.spacingM,
+                runSpacing: AppTheme.spacingM,
+                children: [15, 25, 30, 45, 60, 90].map((mins) {
+                  return ChoiceChip(
+                    label: Text('$mins min'),
+                    selected:
+                        ref.watch(settingsProvider).defaultDurationMinutes ==
+                        mins,
+                    onSelected: (selected) {
+                      if (selected) {
+                        ref
+                            .read(settingsProvider.notifier)
+                            .setDefaultDuration(mins);
+                        Navigator.pop(context);
+                      }
+                    },
+                    selectedColor: AppTheme.primary,
+                    labelStyle: TextStyle(
+                      color:
+                          ref.watch(settingsProvider).defaultDurationMinutes ==
+                              mins
+                          ? Colors.white
+                          : Colors.white70,
+                    ),
+                  );
+                }).toList(),
+              ),
+              const SizedBox(height: AppTheme.spacingL),
+            ],
+          ),
+        );
+      },
     );
   }
 
