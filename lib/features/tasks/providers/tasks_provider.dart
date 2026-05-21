@@ -1,37 +1,26 @@
-import 'dart:convert';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 import '../models/task.dart';
+import '../repositories/task_repository.dart';
 
-const _tasksKey = 'focus_tasks';
 const _uuid = Uuid();
 
 class TasksNotifier extends StateNotifier<List<FocusTask>> {
-  TasksNotifier() : super([]) {
+  final TaskRepository _repository;
+
+  TasksNotifier(this._repository) : super([]) {
     _load();
   }
 
   Future<void> _load() async {
-    final prefs = await SharedPreferences.getInstance();
-    final raw = prefs.getString(_tasksKey);
-    if (raw != null) {
-      final List<dynamic> decoded = jsonDecode(raw) as List<dynamic>;
-      state = decoded
-          .map((e) => FocusTask.fromMap(e as Map<String, dynamic>))
-          .toList();
-    }
-  }
-
-  Future<void> _persist() async {
-    final prefs = await SharedPreferences.getInstance();
-    final encoded = jsonEncode(state.map((t) => t.toMap()).toList());
-    await prefs.setString(_tasksKey, encoded);
+    final tasks = await _repository.getAllTasks();
+    state = tasks;
   }
 
   Future<void> addTask({
     required String title,
     required TaskPriority priority,
+    required TaskEnergyLevel energyLevel,
     required int estimatedMinutes,
     DateTime? deadline,
   }) async {
@@ -39,61 +28,75 @@ class TasksNotifier extends StateNotifier<List<FocusTask>> {
       id: _uuid.v4(),
       title: title,
       priority: priority,
+      energyLevel: energyLevel,
       estimatedMinutes: estimatedMinutes,
       deadline: deadline,
       createdAt: DateTime.now(),
     );
     state = [...state, task];
-    await _persist();
+    await _repository.saveTask(task);
   }
 
   Future<void> removeTask(String id) async {
     state = state.where((t) => t.id != id).toList();
-    await _persist();
+    await _repository.deleteTask(id);
   }
 
   Future<void> completeTask(String id) async {
-    state = state.map((t) {
+    final updatedState = <FocusTask>[];
+    for (var t in state) {
       if (t.id == id) {
-        return t.copyWith(isCompleted: true, completedAt: DateTime.now());
+        final updated = t.copyWith(isCompleted: true, completedAt: DateTime.now());
+        updatedState.add(updated);
+        await _repository.updateTask(updated);
+      } else {
+        updatedState.add(t);
       }
-      return t;
-    }).toList();
-    await _persist();
+    }
+    state = updatedState;
   }
 
   Future<void> uncompleteTask(String id) async {
-    state = state.map((t) {
+    final updatedState = <FocusTask>[];
+    for (var t in state) {
       if (t.id == id) {
-        return t.copyWith(isCompleted: false, clearCompletedAt: true);
+        final updated = t.copyWith(isCompleted: false, clearCompletedAt: true);
+        updatedState.add(updated);
+        await _repository.updateTask(updated);
+      } else {
+        updatedState.add(t);
       }
-      return t;
-    }).toList();
-    await _persist();
+    }
+    state = updatedState;
   }
 
   Future<void> updateScheduledTime(String id, DateTime? startTime) async {
-    state = state.map((t) {
+    final updatedState = <FocusTask>[];
+    for (var t in state) {
       if (t.id == id) {
-        if (startTime == null) {
-          return t.copyWith(clearScheduledTime: true);
-        }
-        return t.copyWith(scheduledStartTime: startTime);
+        final updated = startTime == null
+            ? t.copyWith(clearScheduledTime: true)
+            : t.copyWith(scheduledStartTime: startTime);
+        updatedState.add(updated);
+        await _repository.updateTask(updated);
+      } else {
+        updatedState.add(t);
       }
-      return t;
-    }).toList();
-    await _persist();
+    }
+    state = updatedState;
   }
 
-  /// Clear tasks from previous day (call at day boundary or manually)
   Future<void> clearCompletedTasks() async {
+    final completed = state.where((t) => t.isCompleted).toList();
+    for (var t in completed) {
+      await _repository.deleteTask(t.id);
+    }
     state = state.where((t) => !t.isCompleted).toList();
-    await _persist();
   }
 
   Future<void> clearAllTasks() async {
     state = [];
-    await _persist();
+    await _repository.clearAllTasks();
   }
 
   // Today's tasks only
@@ -116,7 +119,6 @@ class TasksNotifier extends StateNotifier<List<FocusTask>> {
   int get productivityScore {
     final total = state.length;
     if (total == 0) return 0;
-    final completed = state.where((t) => t.isCompleted).length;
     // Weight by priority
     int weightedCompleted = 0;
     int weightedTotal = 0;
@@ -136,7 +138,8 @@ class TasksNotifier extends StateNotifier<List<FocusTask>> {
 
 final tasksProvider =
     StateNotifierProvider<TasksNotifier, List<FocusTask>>((ref) {
-      return TasksNotifier();
+      final repo = ref.watch(taskRepositoryProvider);
+      return TasksNotifier(repo);
     });
 
 // Derived providers

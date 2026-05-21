@@ -158,10 +158,20 @@ class FocusNotifier extends StateNotifier<FocusSession> {
   void _startTimer() {
     _timer?.cancel();
     _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      if (state.remainingSeconds > 0) {
-        state = state.copyWith(remainingSeconds: state.remainingSeconds - 1);
+      if (state.endTime != null) {
+        final remaining = state.endTime!.difference(DateTime.now()).inSeconds;
+        if (remaining > 0) {
+          state = state.copyWith(remainingSeconds: remaining);
+        } else {
+          completeSession();
+        }
       } else {
-        completeSession();
+        // Fallback if no endTime (shouldn't happen in active session)
+        if (state.remainingSeconds > 0) {
+          state = state.copyWith(remainingSeconds: state.remainingSeconds - 1);
+        } else {
+          completeSession();
+        }
       }
     });
   }
@@ -194,7 +204,11 @@ class FocusNotifier extends StateNotifier<FocusSession> {
     }
 
     // Log the session
-    await _statsNotifier.logSession(state.durationSeconds);
+    await _statsNotifier.logSession(
+      state.durationSeconds,
+      taskId: task?.id,
+      completedSuccessfully: true,
+    );
 
     state = state.copyWith(status: FocusStatus.completed);
   }

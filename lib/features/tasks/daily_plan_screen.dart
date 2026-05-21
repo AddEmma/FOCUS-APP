@@ -95,11 +95,18 @@ class _DailyPlanScreenState extends ConsumerState<DailyPlanScreen>
                 style: TextStyle(fontWeight: FontWeight.bold),
               ),
               actions: [
-                IconButton(
-                  icon: const Icon(Icons.auto_awesome_rounded),
-                  tooltip: 'Generate AI Schedule',
-                  onPressed: tasks.isEmpty ? null : _generateSchedule,
-                ),
+                if (schedule.isNotEmpty)
+                  IconButton(
+                    icon: const Icon(Icons.update_rounded),
+                    tooltip: 'Reschedule Remaining',
+                    onPressed: pending.isEmpty ? null : _generateSchedule,
+                  )
+                else
+                  IconButton(
+                    icon: const Icon(Icons.auto_awesome_rounded),
+                    tooltip: 'Generate AI Schedule',
+                    onPressed: pending.isEmpty ? null : _generateSchedule,
+                  ),
               ],
               bottom: TabBar(
                 controller: _tabController,

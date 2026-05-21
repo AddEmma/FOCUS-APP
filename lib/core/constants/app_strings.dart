@@ -27,7 +27,7 @@ class AppStrings {
       'To show the focus shield over distracting apps.';
   static const String permAccessTitle = 'Accessibility Service';
   static const String permAccessDesc =
-      'To prevent force-closing the app during strict mode.';
+      'To instantly detect when you open distracting apps without draining battery.';
   static const String grantPermissions = 'Grant Permissions';
 
   // Dashboard

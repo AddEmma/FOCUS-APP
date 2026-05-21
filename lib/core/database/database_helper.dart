@@ -4,7 +4,7 @@ import 'package:path_provider/path_provider.dart';
 
 class DatabaseHelper {
   static const _databaseName = "focuslock_ai.db";
-  static const _databaseVersion = 1;
+  static const _databaseVersion = 4;
 
   // Tables
   static const tableTasks = 'tasks';
@@ -30,7 +30,34 @@ class DatabaseHelper {
       path,
       version: _databaseVersion,
       onCreate: _onCreate,
+      onUpgrade: _onUpgrade,
     );
+  }
+
+  Future _onUpgrade(Database db, int oldVersion, int newVersion) async {
+    // Migration logic
+    if (oldVersion < 2) {
+      // e.g. add new columns
+    }
+    if (oldVersion < 3) {
+      // Added focus_sessions table
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS $tableFocusSessions (
+          id TEXT PRIMARY KEY,
+          taskId TEXT,
+          startTime TEXT NOT NULL,
+          endTime TEXT NOT NULL,
+          durationSeconds INTEGER NOT NULL,
+          completedSuccessfully INTEGER NOT NULL,
+          FOREIGN KEY (taskId) REFERENCES $tableTasks (id) ON DELETE SET NULL
+        )
+      ''');
+    }
+    if (oldVersion < 4) {
+      // Performance indexes
+      await db.execute('CREATE INDEX IF NOT EXISTS idx_focus_sessions_taskId ON $tableFocusSessions (taskId)');
+      await db.execute('CREATE INDEX IF NOT EXISTS idx_tasks_isCompleted ON $tableTasks (isCompleted)');
+    }
   }
 
   Future _onCreate(Database db, int version) async {
@@ -38,22 +65,26 @@ class DatabaseHelper {
       CREATE TABLE $tableTasks (
         id TEXT PRIMARY KEY,
         title TEXT NOT NULL,
-        priority TEXT NOT NULL,
+        priority INTEGER NOT NULL,
+        energyLevel INTEGER NOT NULL,
         estimatedMinutes INTEGER NOT NULL,
-        deadline TEXT,
-        isCompleted INTEGER NOT NULL
+        deadline INTEGER,
+        isCompleted INTEGER NOT NULL,
+        createdAt INTEGER NOT NULL,
+        scheduledStartTime INTEGER,
+        completedAt INTEGER
       )
     ''');
 
     await db.execute('''
       CREATE TABLE $tableFocusSessions (
         id TEXT PRIMARY KEY,
-        taskId TEXT NOT NULL,
+        taskId TEXT,
         startTime TEXT NOT NULL,
         endTime TEXT NOT NULL,
-        durationMinutes INTEGER NOT NULL,
+        durationSeconds INTEGER NOT NULL,
         completedSuccessfully INTEGER NOT NULL,
-        FOREIGN KEY (taskId) REFERENCES $tableTasks (id) ON DELETE CASCADE
+        FOREIGN KEY (taskId) REFERENCES $tableTasks (id) ON DELETE SET NULL
       )
     ''');
 
@@ -63,6 +94,9 @@ class DatabaseHelper {
         isBlocked INTEGER NOT NULL
       )
     ''');
+
+    await db.execute('CREATE INDEX idx_focus_sessions_taskId ON $tableFocusSessions (taskId)');
+    await db.execute('CREATE INDEX idx_tasks_isCompleted ON $tableTasks (isCompleted)');
   }
 
   // Common CRUD operations can go here, though it's better to use Repositories for specific tables.

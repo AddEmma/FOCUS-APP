@@ -83,6 +83,9 @@ class MainActivity: FlutterActivity() {
                 "hasNotificationPermission" -> {
                     result.success(hasNotificationPermission())
                 }
+                "hasAccessibilityPermission" -> {
+                    result.success(hasAccessibilityPermission())
+                }
                 "requestUsageStatsPermission" -> {
                     requestUsageStatsPermission()
                     result.success(true)
@@ -93,6 +96,10 @@ class MainActivity: FlutterActivity() {
                 }
                 "requestNotificationPermission" -> {
                     requestNotificationPermission()
+                    result.success(true)
+                }
+                "requestAccessibilityPermission" -> {
+                    requestAccessibilityPermission()
                     result.success(true)
                 }
                 "getRecentUsageEvents" -> {
@@ -250,6 +257,42 @@ class MainActivity: FlutterActivity() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             requestPermissions(arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), 101)
         }
+    }
+
+    private fun hasAccessibilityPermission(): Boolean {
+        var accessibilityEnabled = 0
+        val service = "$packageName/${FocusAccessibilityService::class.java.canonicalName}"
+        try {
+            accessibilityEnabled = Settings.Secure.getInt(
+                applicationContext.contentResolver,
+                android.provider.Settings.Secure.ACCESSIBILITY_ENABLED
+            )
+        } catch (e: Settings.SettingNotFoundException) {
+            Log.e("MainActivity", "Error finding setting, default accessibility to not found: " + e.message)
+        }
+        val mStringColonSplitter = android.text.TextUtils.SimpleStringSplitter(':')
+        if (accessibilityEnabled == 1) {
+            val settingValue = Settings.Secure.getString(
+                applicationContext.contentResolver,
+                Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
+            )
+            if (settingValue != null) {
+                mStringColonSplitter.setString(settingValue)
+                while (mStringColonSplitter.hasNext()) {
+                    val accessibilityService = mStringColonSplitter.next()
+                    if (accessibilityService.equals(service, ignoreCase = true)) {
+                        return true
+                    }
+                }
+            }
+        }
+        return false
+    }
+
+    private fun requestAccessibilityPermission() {
+        val intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        startActivity(intent)
     }
 
     private fun getInstalledApps(): List<Map<String, Any>> {

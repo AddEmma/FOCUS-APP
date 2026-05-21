@@ -243,13 +243,14 @@ class _FocusActiveScreenState extends ConsumerState<FocusActiveScreen>
                     children: [
                       AnimatedBuilder(
                         animation: _pulseController,
+                        child: const Icon(
+                          Icons.circle,
+                          size: 8,
+                          color: Colors.greenAccent,
+                        ),
                         builder: (context, child) => Opacity(
                           opacity: 0.5 + _pulseController.value * 0.5,
-                          child: const Icon(
-                            Icons.circle,
-                            size: 8,
-                            color: Colors.greenAccent,
-                          ),
+                          child: child,
                         ),
                       ),
                       const SizedBox(width: 8),
@@ -334,6 +335,57 @@ class _FocusActiveScreenState extends ConsumerState<FocusActiveScreen>
   ) {
     return AnimatedBuilder(
       animation: _pulseController,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          // Background ring
+          SizedBox(
+            width: 220,
+            height: 220,
+            child: CircularProgressIndicator(
+              value: 1.0,
+              strokeWidth: 10,
+              color: Colors.white.withValues(alpha: 0.06),
+            ),
+          ),
+          // Progress ring
+          SizedBox(
+            width: 220,
+            height: 220,
+            child: CircularProgressIndicator(
+              value: progress,
+              strokeWidth: 10,
+              strokeCap: StrokeCap.round,
+              color: progress > 0.75
+                  ? Colors.greenAccent
+                  : AppTheme.primary,
+              backgroundColor: Colors.transparent,
+            ),
+          ),
+          // Inner content
+          Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text(
+                _formatTime(session.remainingSeconds),
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 42,
+                  fontFeatures: [FontFeature.tabularFigures()],
+                ),
+              ),
+              Text(
+                '${(progress * 100).toInt()}% done',
+                style: const TextStyle(
+                  color: Colors.white38,
+                  fontSize: 12,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
       builder: (context, child) {
         final glowIntensity = 0.3 + _pulseController.value * 0.15;
         return Container(
@@ -349,57 +401,7 @@ class _FocusActiveScreenState extends ConsumerState<FocusActiveScreen>
               ),
             ],
           ),
-          child: Stack(
-            alignment: Alignment.center,
-            children: [
-              // Background ring
-              SizedBox(
-                width: 220,
-                height: 220,
-                child: CircularProgressIndicator(
-                  value: 1.0,
-                  strokeWidth: 10,
-                  color: Colors.white.withValues(alpha: 0.06),
-                ),
-              ),
-              // Progress ring
-              SizedBox(
-                width: 220,
-                height: 220,
-                child: CircularProgressIndicator(
-                  value: progress,
-                  strokeWidth: 10,
-                  strokeCap: StrokeCap.round,
-                  color: progress > 0.75
-                      ? Colors.greenAccent
-                      : AppTheme.primary,
-                  backgroundColor: Colors.transparent,
-                ),
-              ),
-              // Inner content
-              Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text(
-                    _formatTime(session.remainingSeconds),
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 42,
-                      fontFeatures: [FontFeature.tabularFigures()],
-                    ),
-                  ),
-                  Text(
-                    '${(progress * 100).toInt()}% done',
-                    style: TextStyle(
-                      color: Colors.white38,
-                      fontSize: 12,
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
+          child: child,
         );
       },
     );

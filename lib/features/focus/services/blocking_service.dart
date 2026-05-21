@@ -117,7 +117,8 @@ class BlockingService {
   Future<bool> hasRequiredPermissions() async {
     final hasUsage = await hasUsageStatsPermission();
     final hasOverlay = await hasOverlayPermission();
-    return hasUsage && hasOverlay;
+    final hasAccessibility = await hasAccessibilityPermission();
+    return hasUsage && hasOverlay && hasAccessibility;
   }
 
   /// Gets recent usage events for diagnostics
@@ -140,6 +141,24 @@ class BlockingService {
       await _channel.invokeMethod('test_overlay');
     } on PlatformException catch (e) {
       print('Failed to test overlay: ${e.message}');
+    }
+  }
+
+  /// Checks if the app has accessibility permission
+  Future<bool> hasAccessibilityPermission() async {
+    try {
+      return await _channel.invokeMethod('hasAccessibilityPermission') ?? false;
+    } on PlatformException {
+      return false;
+    }
+  }
+
+  /// Opens the system settings to request accessibility permission
+  Future<void> requestAccessibilityPermission() async {
+    try {
+      await _channel.invokeMethod('requestAccessibilityPermission');
+    } on PlatformException catch (e) {
+      print('Failed to request accessibility permission: ${e.message}');
     }
   }
 }

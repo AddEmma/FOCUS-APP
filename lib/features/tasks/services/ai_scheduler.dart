@@ -95,23 +95,31 @@ class AiScheduler {
     final List<FocusTask> sorted = List.from(tasks);
 
     if (hour < 12) {
-      // Morning: High → Medium → Low
-      sorted.sort((a, b) => a.priority.sortOrder.compareTo(b.priority.sortOrder));
+      // Morning: High Energy → Medium → Low Energy. Tie-break by priority
+      sorted.sort((a, b) {
+        final cmp = a.energyLevel.sortOrder.compareTo(b.energyLevel.sortOrder);
+        if (cmp != 0) return cmp;
+        return a.priority.sortOrder.compareTo(b.priority.sortOrder);
+      });
     } else if (hour < 17) {
-      // Afternoon: Medium → High → Low
+      // Afternoon: Medium Energy → High Energy → Low Energy
       sorted.sort((a, b) {
         const order = {
-          TaskPriority.medium: 0,
-          TaskPriority.high: 1,
-          TaskPriority.low: 2,
+          TaskEnergyLevel.medium: 0,
+          TaskEnergyLevel.high: 1,
+          TaskEnergyLevel.low: 2,
         };
-        return (order[a.priority] ?? 1).compareTo(order[b.priority] ?? 1);
+        final cmp = (order[a.energyLevel] ?? 1).compareTo(order[b.energyLevel] ?? 1);
+        if (cmp != 0) return cmp;
+        return a.priority.sortOrder.compareTo(b.priority.sortOrder);
       });
     } else {
-      // Evening: Low → Medium → High (light tasks to wind down)
-      sorted.sort(
-        (a, b) => b.priority.sortOrder.compareTo(a.priority.sortOrder),
-      );
+      // Evening: Low Energy → Medium → High Energy (light tasks to wind down)
+      sorted.sort((a, b) {
+        final cmp = b.energyLevel.sortOrder.compareTo(a.energyLevel.sortOrder);
+        if (cmp != 0) return cmp;
+        return a.priority.sortOrder.compareTo(b.priority.sortOrder);
+      });
     }
 
     return sorted;
@@ -142,7 +150,6 @@ class AiScheduler {
 
   /// Find the currently active or next upcoming block
   static ScheduledBlock? findCurrentOrNext(List<ScheduledBlock> blocks) {
-    final now = DateTime.now();
     // First check if any block is active now
     for (final block in blocks) {
       if (block.isActive) return block;

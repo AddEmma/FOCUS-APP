@@ -2,6 +2,32 @@ import 'package:flutter/material.dart';
 
 enum TaskPriority { high, medium, low }
 
+enum TaskEnergyLevel { high, medium, low }
+
+extension TaskEnergyLevelExtension on TaskEnergyLevel {
+  String get label {
+    switch (this) {
+      case TaskEnergyLevel.high:
+        return 'High Energy (Hard)';
+      case TaskEnergyLevel.medium:
+        return 'Medium Energy';
+      case TaskEnergyLevel.low:
+        return 'Low Energy (Easy)';
+    }
+  }
+
+  int get sortOrder {
+    switch (this) {
+      case TaskEnergyLevel.high:
+        return 0;
+      case TaskEnergyLevel.medium:
+        return 1;
+      case TaskEnergyLevel.low:
+        return 2;
+    }
+  }
+}
+
 extension TaskPriorityExtension on TaskPriority {
   String get label {
     switch (this) {
@@ -52,6 +78,7 @@ class FocusTask {
   final String id;
   final String title;
   final TaskPriority priority;
+  final TaskEnergyLevel energyLevel;
   final int estimatedMinutes;
   final DateTime? deadline;
   final bool isCompleted;
@@ -63,6 +90,7 @@ class FocusTask {
     required this.id,
     required this.title,
     required this.priority,
+    this.energyLevel = TaskEnergyLevel.medium,
     required this.estimatedMinutes,
     this.deadline,
     this.isCompleted = false,
@@ -75,6 +103,7 @@ class FocusTask {
     String? id,
     String? title,
     TaskPriority? priority,
+    TaskEnergyLevel? energyLevel,
     int? estimatedMinutes,
     DateTime? deadline,
     bool? isCompleted,
@@ -89,6 +118,7 @@ class FocusTask {
       id: id ?? this.id,
       title: title ?? this.title,
       priority: priority ?? this.priority,
+      energyLevel: energyLevel ?? this.energyLevel,
       estimatedMinutes: estimatedMinutes ?? this.estimatedMinutes,
       deadline: clearDeadline ? null : (deadline ?? this.deadline),
       isCompleted: isCompleted ?? this.isCompleted,
@@ -106,9 +136,10 @@ class FocusTask {
       'id': id,
       'title': title,
       'priority': priority.index,
+      'energyLevel': energyLevel.index,
       'estimatedMinutes': estimatedMinutes,
       'deadline': deadline?.millisecondsSinceEpoch,
-      'isCompleted': isCompleted,
+      'isCompleted': isCompleted ? 1 : 0,
       'createdAt': createdAt.millisecondsSinceEpoch,
       'scheduledStartTime': scheduledStartTime?.millisecondsSinceEpoch,
       'completedAt': completedAt?.millisecondsSinceEpoch,
@@ -120,11 +151,12 @@ class FocusTask {
       id: map['id'] as String,
       title: map['title'] as String,
       priority: TaskPriority.values[map['priority'] as int],
+      energyLevel: map['energyLevel'] != null ? TaskEnergyLevel.values[map['energyLevel'] as int] : TaskEnergyLevel.medium,
       estimatedMinutes: map['estimatedMinutes'] as int,
       deadline: map['deadline'] != null
           ? DateTime.fromMillisecondsSinceEpoch(map['deadline'] as int)
           : null,
-      isCompleted: map['isCompleted'] as bool? ?? false,
+      isCompleted: (map['isCompleted'] == 1 || map['isCompleted'] == true),
       createdAt: DateTime.fromMillisecondsSinceEpoch(map['createdAt'] as int),
       scheduledStartTime: map['scheduledStartTime'] != null
           ? DateTime.fromMillisecondsSinceEpoch(

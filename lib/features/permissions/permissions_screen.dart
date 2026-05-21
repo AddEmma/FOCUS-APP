@@ -22,6 +22,7 @@ class _PermissionsScreenState extends ConsumerState<PermissionsScreen>
     with WidgetsBindingObserver {
   bool _usageGranted = false;
   bool _overlayGranted = false;
+  bool _accessibilityGranted = false;
   bool _isLoading = true;
 
   @override
@@ -49,11 +50,13 @@ class _PermissionsScreenState extends ConsumerState<PermissionsScreen>
     final blockingService = ref.read(permissionsBlockingServiceProvider);
     final hasUsage = await blockingService.hasUsageStatsPermission();
     final hasOverlay = await blockingService.hasOverlayPermission();
+    final hasAccessibility = await blockingService.hasAccessibilityPermission();
 
     if (mounted) {
       setState(() {
         _usageGranted = hasUsage;
         _overlayGranted = hasOverlay;
+        _accessibilityGranted = hasAccessibility;
         _isLoading = false;
       });
     }
@@ -69,9 +72,14 @@ class _PermissionsScreenState extends ConsumerState<PermissionsScreen>
     await blockingService.requestOverlayPermission();
   }
 
+  Future<void> _requestAccessibilityPermission() async {
+    final blockingService = ref.read(permissionsBlockingServiceProvider);
+    await blockingService.requestAccessibilityPermission();
+  }
+
   @override
   Widget build(BuildContext context) {
-    final allGranted = _usageGranted && _overlayGranted;
+    final allGranted = _usageGranted && _overlayGranted && _accessibilityGranted;
 
     return Scaffold(
       appBar: AppBar(
@@ -123,6 +131,15 @@ class _PermissionsScreenState extends ConsumerState<PermissionsScreen>
                         isGranted: _overlayGranted,
                         onTap: _requestOverlayPermission,
                         delay: 400,
+                      ),
+                      const SizedBox(height: AppTheme.spacingM),
+                      _buildPermissionCard(
+                        title: AppStrings.permAccessTitle,
+                        description: AppStrings.permAccessDesc,
+                        icon: Icons.accessibility_new_rounded,
+                        isGranted: _accessibilityGranted,
+                        onTap: _requestAccessibilityPermission,
+                        delay: 500,
                       ),
                     ],
                   ),

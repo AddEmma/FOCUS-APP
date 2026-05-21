@@ -14,7 +14,6 @@ class StatsScreen extends ConsumerStatefulWidget {
 }
 
 class _StatsScreenState extends ConsumerState<StatsScreen> {
-  int _touchedIndex = -1;
 
   @override
   Widget build(BuildContext context) {

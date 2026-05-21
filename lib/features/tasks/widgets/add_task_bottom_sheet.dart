@@ -17,6 +17,7 @@ class _AddTaskBottomSheetState extends ConsumerState<AddTaskBottomSheet> {
   final _titleController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
   TaskPriority _selectedPriority = TaskPriority.medium;
+  TaskEnergyLevel _selectedEnergy = TaskEnergyLevel.medium;
   int _estimatedMinutes = 30;
   DateTime? _deadline;
 
@@ -140,6 +141,54 @@ class _AddTaskBottomSheetState extends ConsumerState<AddTaskBottomSheet> {
                 );
               }).toList(),
             ).animate().fadeIn(delay: 150.ms),
+            const SizedBox(height: 20),
+            // Energy Level
+            Text(
+              'Energy Level',
+              style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                color: AppTheme.textSecondary,
+              ),
+            ),
+            const SizedBox(height: 10),
+            Row(
+              children: TaskEnergyLevel.values.map((energy) {
+                final isSelected = _selectedEnergy == energy;
+                return Expanded(
+                  child: GestureDetector(
+                    onTap: () => setState(() => _selectedEnergy = energy),
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 200),
+                      margin: const EdgeInsets.only(right: 8),
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      decoration: BoxDecoration(
+                        color: isSelected
+                            ? AppTheme.secondary.withOpacity(0.2)
+                            : AppTheme.background,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: isSelected
+                              ? AppTheme.secondary
+                              : Colors.white.withOpacity(0.08),
+                          width: isSelected ? 1.5 : 1,
+                        ),
+                      ),
+                      child: Center(
+                        child: Text(
+                          energy.label.split(' ')[0], // High, Medium, Low
+                          style: TextStyle(
+                            color: isSelected ? AppTheme.secondary : Colors.white38,
+                            fontSize: 12,
+                            fontWeight: isSelected
+                                ? FontWeight.bold
+                                : FontWeight.normal,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                );
+              }).toList(),
+            ).animate().fadeIn(delay: 180.ms),
             const SizedBox(height: 20),
             // Duration
             Row(
@@ -316,6 +365,7 @@ class _AddTaskBottomSheetState extends ConsumerState<AddTaskBottomSheet> {
     ref.read(tasksProvider.notifier).addTask(
       title: _titleController.text.trim(),
       priority: _selectedPriority,
+      energyLevel: _selectedEnergy,
       estimatedMinutes: _estimatedMinutes,
       deadline: _deadline,
     );

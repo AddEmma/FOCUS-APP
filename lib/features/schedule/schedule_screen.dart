@@ -21,7 +21,6 @@ class _ScheduleScreenState extends ConsumerState<ScheduleScreen> {
   @override
   Widget build(BuildContext context) {
     final schedules = ref.watch(scheduleProvider);
-    final selectedApps = ref.watch(selectedAppsProvider);
 
     // Filter schedules for the selected day (1-7)
     final daySchedules = schedules

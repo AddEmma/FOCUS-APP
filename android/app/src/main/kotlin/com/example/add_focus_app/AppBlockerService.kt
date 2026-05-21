@@ -82,7 +82,7 @@ class AppBlockerService : Service() {
         Log.d(TAG, "Launcher resolved to: $launcherPackage")
     }
 
-    private val monitorRunnable = object : Runnable {
+    val monitorRunnable = object : Runnable {
         override fun run() {
             if (!isMonitoring) {
                 Log.d(TAG, "Monitoring stopped")
@@ -96,43 +96,50 @@ class AppBlockerService : Service() {
                 return
             }
 
-            // Check foreground app
-            val foregroundApp = getForegroundApp()
-            
-            if (foregroundApp != null) {
-                val isBlocked = shouldBlock(foregroundApp)
-                val isNewApp = foregroundApp != lastForegroundApp
-                
-                if (isNewApp) {
-                    Log.d(TAG, "New Foreground App: $foregroundApp, shouldBlock=$isBlocked")
-                    
-                    // Report all app activity for stats tracking
-                    onAppActivity?.invoke(foregroundApp)
-                    
-                    // Increment blocked attempts on first detection of a blocked app
-                    if (isBlocked) {
-                        blockedAttempts++
-                    }
-                    
-                    lastForegroundApp = foregroundApp
-                    // Stream detection event with blocking status
-                    onBlockedAttempt?.invoke(foregroundApp, blockedAttempts, isBlocked)
-                }
-            
-                // ALWAYS block on every poll cycle — not just on app change.
-                // This ensures that if the user dismisses the overlay and returns
-                // to the blocked app, it gets re-blocked immediately on the next tick.
-                if (isBlocked) {
-                    Log.i(TAG, "!!! SHIELD ACTIVE: Blocking $foregroundApp !!!")
-                    // Send user to home screen first, then show overlay
-                    sendUserHome()
-                    showBlockingOverlay(foregroundApp)
-                    onBlockedAttempt?.invoke(foregroundApp, blockedAttempts, true)
+            // Only use UsageStats fallback if AccessibilityService is NOT active
+            if (FocusAccessibilityService.instance == null) {
+                val foregroundApp = getForegroundApp()
+                if (foregroundApp != null) {
+                    handleForegroundAppChange(foregroundApp)
                 }
             }
 
-            // Schedule next check (300ms for snappier interception)
-            handler.postDelayed(this, 300)
+            // Schedule next check (2000ms for battery-friendly fallback)
+            handler.postDelayed(this, 2000)
+        }
+    }
+
+    fun handleForegroundAppChange(foregroundApp: String) {
+        val isBlocked = shouldBlock(foregroundApp)
+        val isNewApp = foregroundApp != lastForegroundApp
+        
+        if (isNewApp) {
+            Log.d(TAG, "New Foreground App: $foregroundApp, shouldBlock=$isBlocked")
+            
+            // Report all app activity for stats tracking
+            onAppActivity?.invoke(foregroundApp)
+            
+            // Increment blocked attempts on first detection of a blocked app
+            if (isBlocked) {
+                blockedAttempts++
+            }
+            
+            lastForegroundApp = foregroundApp
+            // Stream detection event with blocking status
+            onBlockedAttempt?.invoke(foregroundApp, blockedAttempts, isBlocked)
+        }
+    
+        // ALWAYS block on every check — not just on app change.
+        // This ensures that if the user dismisses the overlay and returns
+        // to the blocked app, it gets re-blocked immediately.
+        if (isBlocked) {
+            Log.i(TAG, "!!! SHIELD ACTIVE: Blocking $foregroundApp !!!")
+            // Send user to home screen first, then show overlay
+            sendUserHome()
+            showBlockingOverlay(foregroundApp)
+            if (!isNewApp) { // Ensure stream updates if they try to bypass
+                onBlockedAttempt?.invoke(foregroundApp, blockedAttempts, true)
+            }
         }
     }
 
