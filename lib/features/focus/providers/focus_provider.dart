@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../services/blocking_service.dart';
 import '../../apps/providers/apps_provider.dart';
 import '../../stats/providers/stats_provider.dart';
+import '../../tasks/models/task.dart';
+import '../../tasks/providers/tasks_provider.dart';
 
 enum FocusStatus { idle, active, completed }
 
@@ -16,6 +18,7 @@ class FocusSession {
   final List<String> blockedApps;
   final int blockedAttempts;
   final String? lastDetectedApp;
+  final FocusTask? currentTask; // The task being focused on
 
   const FocusSession({
     this.status = FocusStatus.idle,
@@ -27,6 +30,7 @@ class FocusSession {
     this.blockedApps = const [],
     this.blockedAttempts = 0,
     this.lastDetectedApp,
+    this.currentTask,
   });
 
   FocusSession copyWith({
@@ -39,6 +43,8 @@ class FocusSession {
     List<String>? blockedApps,
     int? blockedAttempts,
     String? lastDetectedApp,
+    FocusTask? currentTask,
+    bool clearTask = false,
   }) {
     return FocusSession(
       status: status ?? this.status,
@@ -50,8 +56,17 @@ class FocusSession {
       blockedApps: blockedApps ?? this.blockedApps,
       blockedAttempts: blockedAttempts ?? this.blockedAttempts,
       lastDetectedApp: lastDetectedApp ?? this.lastDetectedApp,
+      currentTask: clearTask ? null : (currentTask ?? this.currentTask),
     );
   }
+
+  double get progressFraction {
+    if (durationSeconds == 0) return 0;
+    final elapsed = durationSeconds - remainingSeconds;
+    return (elapsed / durationSeconds).clamp(0.0, 1.0);
+  }
+
+  int get elapsedSeconds => durationSeconds - remainingSeconds;
 }
 
 class FocusNotifier extends StateNotifier<FocusSession> {
@@ -70,10 +85,8 @@ class FocusNotifier extends StateNotifier<FocusSession> {
   void _listenToSelectedApps() {
     _ref.listen<Set<String>>(selectedAppsProvider, (previous, next) {
       if (state.status == FocusStatus.active) {
-        // Automatically sync with native service if session is active
         final appsToBlock = next.toList();
         state = state.copyWith(blockedApps: appsToBlock);
-
         _blockingService.startBlocking(
           blockedApps: appsToBlock,
           endTime: state.endTime!,
@@ -97,13 +110,12 @@ class FocusNotifier extends StateNotifier<FocusSession> {
 
         state = FocusSession(
           status: FocusStatus.active,
-          durationSeconds:
-              remainingSeconds, // Approximation for restored session
+          durationSeconds: remainingSeconds,
           remainingSeconds: remainingSeconds,
           endTime: endTime,
           blockedApps: blockedApps,
           blockedAttempts: attempts,
-          isStrict: true, // Assume strict if recovered context likely lost
+          isStrict: true,
         );
         _startTimer();
         _subscribeToEvents();
@@ -111,7 +123,11 @@ class FocusNotifier extends StateNotifier<FocusSession> {
     }
   }
 
-  Future<void> startSession(int durationMinutes, bool isStrict) async {
+  Future<void> startSession(
+    int durationMinutes,
+    bool isStrict, {
+    FocusTask? task,
+  }) async {
     final durationSeconds = durationMinutes * 60;
     final now = DateTime.now();
     final endTime = now.add(Duration(seconds: durationSeconds));
@@ -127,9 +143,9 @@ class FocusNotifier extends StateNotifier<FocusSession> {
       blockedApps: appsToBlock,
       blockedAttempts: 0,
       lastDetectedApp: null,
+      currentTask: task,
     );
 
-    // Start native app focus mode
     await _blockingService.startBlocking(
       blockedApps: appsToBlock,
       endTime: endTime,
@@ -171,6 +187,12 @@ class FocusNotifier extends StateNotifier<FocusSession> {
     _eventSubscription?.cancel();
     await _blockingService.stopBlocking();
 
+    // Auto-complete the task if one is linked
+    final task = state.currentTask;
+    if (task != null) {
+      _ref.read(tasksProvider.notifier).completeTask(task.id);
+    }
+
     // Log the session
     await _statsNotifier.logSession(state.durationSeconds);
 
@@ -178,7 +200,7 @@ class FocusNotifier extends StateNotifier<FocusSession> {
   }
 
   Future<void> cancelSession() async {
-    if (state.isStrict) return; // Cannot cancel in strict mode
+    if (state.isStrict) return;
     await reset();
   }
 
@@ -193,7 +215,6 @@ class FocusNotifier extends StateNotifier<FocusSession> {
   void dispose() {
     _timer?.cancel();
     _eventSubscription?.cancel();
-    // _blockingService.stopBlocking(); // Don't stop native service on dispose, keeps running in background
     super.dispose();
   }
 }

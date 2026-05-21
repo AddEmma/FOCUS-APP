@@ -12,6 +12,7 @@ import '../../features/settings/settings_screen.dart';
 import '../../features/focus/set_focus_time_screen.dart';
 import '../../features/focus/focus_active_screen.dart';
 import '../../features/diagnostics/diagnostics_screen.dart';
+import '../../features/tasks/daily_plan_screen.dart';
 
 final GlobalKey<NavigatorState> _rootNavigatorKey = GlobalKey<NavigatorState>();
 final GlobalKey<NavigatorState> _shellNavigatorKey =
@@ -91,6 +92,11 @@ final appRouter = GoRouter(
       path: '/diagnostics',
       parentNavigatorKey: _rootNavigatorKey,
       builder: (context, state) => const DiagnosticsScreen(),
+    ),
+    GoRoute(
+      path: '/daily-plan',
+      parentNavigatorKey: _rootNavigatorKey,
+      builder: (context, state) => const DailyPlanScreen(),
     ),
   ],
 );

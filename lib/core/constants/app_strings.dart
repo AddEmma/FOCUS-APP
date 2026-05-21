@@ -68,4 +68,41 @@ class AppStrings {
   static const String navSchedule = 'Schedule';
   static const String navStats = 'Stats';
   static const String navSettings = 'Settings';
+
+  // Tasks & Planning
+  static const String dailyPlanTitle = 'Daily Plan';
+  static const String addTaskTitle = 'Add Task';
+  static const String taskTitleHint = 'What do you need to focus on?';
+  static const String generatePlan = 'Generate AI Schedule';
+  static const String noTasksYet = 'No tasks yet';
+  static const String addFirstTask = 'Add your first task';
+  static const String taskCompleted = 'Task completed! 🎉';
+  static const String pendingTasks = 'Pending';
+  static const String completedTasks = 'Completed';
+  static const String planYourDay = "Let's plan your day! 🚀";
+
+  // Priorities
+  static const String priorityHigh = 'High';
+  static const String priorityMedium = 'Medium';
+  static const String priorityLow = 'Low';
+
+  // AI Scheduler
+  static const String aiScheduleGenerated = 'AI schedule generated!';
+  static const String timeline = 'Timeline';
+  static const String upNext = 'Up Next';
+  static const String nowLabel = 'NOW';
+  static const String breakLabel = 'Break';
+
+  // Break screen
+  static const String breakTime = 'Break Time';
+  static const String breakResumingSoon = 'Resuming soon...';
+  static const String skipBreak = 'Skip Break — Start Focusing';
+  static const String nextUp = 'Up next';
+
+  // Stats / Gamification
+  static const String productivityScore = 'Productivity Score';
+  static const String tasksToday = 'Tasks Today';
+  static const String weeklyFocus = 'Focus Time (This Week)';
+  static const String sessionsBreakdown = 'Sessions Breakdown';
+  static const String allTimeRecord = 'Personal Best';
 }
